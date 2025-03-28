@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { AudioRecorder } from './components/AudioRecorder'
+import ActionItemsTable from './components/ActionItemsTable';
 
 export default function Home() {
   const [transcription, setTranscription] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [actionItems, setActionItems] = useState<any>(null);
 
   const handleRecordingComplete = async (blob: Blob) => {
     setIsLoading(true);
@@ -25,10 +27,32 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error);
       
       setTranscription(data.text);
+      await processTranscript(data.text);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const processTranscript = async (transcript: string) => {
+    try {
+      const response = await fetch('/api/process-transcript', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transcript }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process transcript');
+      }
+
+      const data = await response.json();
+      setActionItems(data);
+    } catch (error) {
+      console.error('Error processing transcript:', error);
     }
   };
 
@@ -64,6 +88,13 @@ export default function Home() {
                 <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
                   <p className="text-sm leading-relaxed">{transcription}</p>
                 </div>
+              </div>
+            )}
+
+            {actionItems && (
+              <div className="mt-8">
+                <h2 className="text-2xl font-bold mb-4">Action Items</h2>
+                <ActionItemsTable categories={actionItems.categories} />
               </div>
             )}
           </div>

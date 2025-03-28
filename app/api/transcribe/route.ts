@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { type File } from 'openai/uploads'; // Import the File type if needed for casting
+import { File as WebFile } from 'node:fs';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
