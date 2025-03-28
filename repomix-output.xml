@@ -1,0 +1,714 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+app/
+  api/
+    process-transcript/
+      route.ts
+    transcribe/
+      route.ts
+  components/
+    ActionItemsTable.tsx
+    AudioRecorder.tsx
+  globals.css
+  layout.tsx
+  page.tsx
+public/
+  file.svg
+  globe.svg
+  next.svg
+  vercel.svg
+  window.svg
+.gitignore
+next.config.js
+package.json
+postcss.config.mjs
+README.md
+tailwind.config.ts
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/api/process-transcript/route.ts">
+import { NextRequest, NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY!);
+
+const PROMPT = `
+Analyze this transcript and:
+1. Extract actionable items
+2. Group them by category/theme
+3. For each action item, provide specific next steps
+4. Format the response as a JSON object with this structure:
+{
+  "categories": [
+    {
+      "name": "string",
+      "items": [
+        {
+          "actionItem": "string",
+          "nextSteps": ["string"]
+        }
+      ]
+    }
+  ]
+}
+`;
+
+export async function POST(request: NextRequest) {
+  try {
+    const { transcript } = await request.json();
+
+    if (!transcript) {
+      return NextResponse.json(
+        { error: 'No transcript provided' },
+        { status: 400 }
+      );
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    const result = await model.generateContent([PROMPT, transcript]);
+    const response = await result.response;
+    const text = response.text();
+    
+    // Parse the JSON response
+    const actionItems = JSON.parse(text);
+
+    return NextResponse.json(actionItems);
+  } catch (error) {
+    console.error('Transcript processing error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process transcript' },
+      { status: 500 }
+    );
+  }
+}
+</file>
+
+<file path="app/components/ActionItemsTable.tsx">
+import React from 'react';
+
+interface NextStep {
+  actionItem: string;
+  nextSteps: string[];
+}
+
+interface Category {
+  name: string;
+  items: NextStep[];
+}
+
+interface ActionItemsTableProps {
+  categories: Category[];
+}
+
+const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories }) => {
+  return (
+    <div className="space-y-6">
+      {categories.map((category, categoryIndex) => (
+        <div key={categoryIndex} className="bg-white rounded-lg shadow">
+          <div className="bg-blue-600 text-white px-4 py-2 rounded-t-lg">
+            <h2 className="text-xl font-semibold">{category.name}</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Action Item
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Next Steps
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {category.items.map((item, itemIndex) => (
+                  <tr key={itemIndex}>
+                    <td className="px-6 py-4 whitespace-normal">
+                      <div className="text-sm text-gray-900">{item.actionItem}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-normal">
+                      <ul className="list-disc list-inside text-sm text-gray-900">
+                        {item.nextSteps.map((step, stepIndex) => (
+                          <li key={stepIndex}>{step}</li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default ActionItemsTable;
+</file>
+
+<file path="app/components/AudioRecorder.tsx">
+'use client';
+
+import { useState, useRef } from 'react';
+
+interface AudioRecorderProps {
+  onRecordingComplete: (blob: Blob) => Promise<void>;
+}
+
+export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [error, setError] = useState<string>('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        await onRecordingComplete(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setError('');
+    } catch (err) {
+      setError('Error accessing microphone. Please ensure you have granted permission.');
+      console.error(err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      {error && (
+        <p className="text-red-500 text-sm">{error}</p>
+      )}
+      <button
+        onClick={isRecording ? stopRecording : startRecording}
+        className={`rounded-full px-6 py-2 font-medium transition-colors ${
+          isRecording 
+            ? 'bg-red-500 hover:bg-red-600 text-white' 
+            : 'bg-blue-500 hover:bg-blue-600 text-white'
+        }`}
+      >
+        {isRecording ? "Stop Recording" : "Start Recording"}
+      </button>
+      {isRecording && (
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-sm">Recording...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="public/file.svg">
+<svg fill="none" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 13.5V5.41a1 1 0 0 0-.3-.7L9.8.29A1 1 0 0 0 9.08 0H1.5v13.5A2.5 2.5 0 0 0 4 16h8a2.5 2.5 0 0 0 2.5-2.5m-1.5 0v-7H8v-5H3v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1M9.5 5V2.12L12.38 5zM5.13 5h-.62v1.25h2.12V5zm-.62 3h7.12v1.25H4.5zm.62 3h-.62v1.25h7.12V11z" clip-rule="evenodd" fill="#666" fill-rule="evenodd"/></svg>
+</file>
+
+<file path="public/globe.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><g clip-path="url(#a)"><path fill-rule="evenodd" clip-rule="evenodd" d="M10.27 14.1a6.5 6.5 0 0 0 3.67-3.45q-1.24.21-2.7.34-.31 1.83-.97 3.1M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m.48-1.52a7 7 0 0 1-.96 0H7.5a4 4 0 0 1-.84-1.32q-.38-.89-.63-2.08a40 40 0 0 0 3.92 0q-.25 1.2-.63 2.08a4 4 0 0 1-.84 1.31zm2.94-4.76q1.66-.15 2.95-.43a7 7 0 0 0 0-2.58q-1.3-.27-2.95-.43a18 18 0 0 1 0 3.44m-1.27-3.54a17 17 0 0 1 0 3.64 39 39 0 0 1-4.3 0 17 17 0 0 1 0-3.64 39 39 0 0 1 4.3 0m1.1-1.17q1.45.13 2.69.34a6.5 6.5 0 0 0-3.67-3.44q.65 1.26.98 3.1M8.48 1.5l.01.02q.41.37.84 1.31.38.89.63 2.08a40 40 0 0 0-3.92 0q.25-1.2.63-2.08a4 4 0 0 1 .85-1.32 7 7 0 0 1 .96 0m-2.75.4a6.5 6.5 0 0 0-3.67 3.44 29 29 0 0 1 2.7-.34q.31-1.83.97-3.1M4.58 6.28q-1.66.16-2.95.43a7 7 0 0 0 0 2.58q1.3.27 2.95.43a18 18 0 0 1 0-3.44m.17 4.71q-1.45-.12-2.69-.34a6.5 6.5 0 0 0 3.67 3.44q-.65-1.27-.98-3.1" fill="#666"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h16v16H0z"/></clipPath></defs></svg>
+</file>
+
+<file path="public/next.svg">
+<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 394 80"><path fill="#000" d="M262 0h68.5v12.7h-27.2v66.6h-13.6V12.7H262V0ZM149 0v12.7H94v20.4h44.3v12.6H94v21h55v12.6H80.5V0h68.7zm34.3 0h-17.8l63.8 79.4h17.9l-32-39.7 32-39.6h-17.9l-23 28.6-23-28.6zm18.3 56.7-9-11-27.1 33.7h17.8l18.3-22.7z"/><path fill="#000" d="M81 79.3 17 0H0v79.3h13.6V17l50.2 62.3H81Zm252.6-.4c-1 0-1.8-.4-2.5-1s-1.1-1.6-1.1-2.6.3-1.8 1-2.5 1.6-1 2.6-1 1.8.3 2.5 1a3.4 3.4 0 0 1 .6 4.3 3.7 3.7 0 0 1-3 1.8zm23.2-33.5h6v23.3c0 2.1-.4 4-1.3 5.5a9.1 9.1 0 0 1-3.8 3.5c-1.6.8-3.5 1.3-5.7 1.3-2 0-3.7-.4-5.3-1s-2.8-1.8-3.7-3.2c-.9-1.3-1.4-3-1.4-5h6c.1.8.3 1.6.7 2.2s1 1.2 1.6 1.5c.7.4 1.5.5 2.4.5 1 0 1.8-.2 2.4-.6a4 4 0 0 0 1.6-1.8c.3-.8.5-1.8.5-3V45.5zm30.9 9.1a4.4 4.4 0 0 0-2-3.3 7.5 7.5 0 0 0-4.3-1.1c-1.3 0-2.4.2-3.3.5-.9.4-1.6 1-2 1.6a3.5 3.5 0 0 0-.3 4c.3.5.7.9 1.3 1.2l1.8 1 2 .5 3.2.8c1.3.3 2.5.7 3.7 1.2a13 13 0 0 1 3.2 1.8 8.1 8.1 0 0 1 3 6.5c0 2-.5 3.7-1.5 5.1a10 10 0 0 1-4.4 3.5c-1.8.8-4.1 1.2-6.8 1.2-2.6 0-4.9-.4-6.8-1.2-2-.8-3.4-2-4.5-3.5a10 10 0 0 1-1.7-5.6h6a5 5 0 0 0 3.5 4.6c1 .4 2.2.6 3.4.6 1.3 0 2.5-.2 3.5-.6 1-.4 1.8-1 2.4-1.7a4 4 0 0 0 .8-2.4c0-.9-.2-1.6-.7-2.2a11 11 0 0 0-2.1-1.4l-3.2-1-3.8-1c-2.8-.7-5-1.7-6.6-3.2a7.2 7.2 0 0 1-2.4-5.7 8 8 0 0 1 1.7-5 10 10 0 0 1 4.3-3.5c2-.8 4-1.2 6.4-1.2 2.3 0 4.4.4 6.2 1.2 1.8.8 3.2 2 4.3 3.4 1 1.4 1.5 3 1.5 5h-5.8z"/></svg>
+</file>
+
+<file path="public/vercel.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1155 1000"><path d="m577.3 0 577.4 1000H0z" fill="#fff"/></svg>
+</file>
+
+<file path="public/window.svg">
+<svg fill="none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill-rule="evenodd" clip-rule="evenodd" d="M1.5 2.5h13v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1zM0 1h16v11.5a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 0 12.5zm3.75 4.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5M7 4.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0m1.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5" fill="#666"/></svg>
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+</file>
+
+<file path="next.config.js">
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  // Add any other configurations you had here
+};
+
+module.exports = nextConfig;
+</file>
+
+<file path="README.md">
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
+## Getting Started
+
+First, run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Learn More
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+</file>
+
+<file path="tailwind.config.ts">
+const { fontFamily } = require('tailwindcss/defaultTheme');
+
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['system-ui', ...fontFamily.sans],
+        mono: ['ui-monospace', ...fontFamily.mono],
+      },
+    },
+  },
+  plugins: [],
+}
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+</file>
+
+<file path="app/api/transcribe/route.ts">
+import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
+// import { type File } from 'openai/uploads'; // Import the File type if needed for casting
+// import { File as WebFile } from 'node:fs';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// New Next.js route configuration format
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
+export async function POST(request: NextRequest) {
+  try {
+    const formData = await request.formData();
+    // --- Check the key name 'audio' matches your frontend form ---
+    const audioFile = formData.get('audio');
+
+    if (!audioFile || !(audioFile instanceof Blob)) { // More robust check
+      return NextResponse.json(
+        { error: 'No valid audio file provided under the key "audio"' },
+        { status: 400 }
+      );
+    }
+
+    console.log('Received audio file:', {
+        name: audioFile instanceof File ? audioFile.name : 'N/A', // Log name if it's a File
+        size: audioFile.size,
+        type: audioFile.type
+    });
+
+    const file = new File([audioFile], 'audio.webm', { type: audioFile.type });
+
+    // --- Attempt to pass the Blob/File directly ---
+    const response = await openai.audio.transcriptions.create({
+      // The library might handle Blob/File directly. Cast to File if necessary.
+      // It needs a name, which Blob doesn't inherently have, so File is better.
+      // If it's just a Blob, you might need Solution 2.
+      file: file,
+      model: 'whisper-1',
+      response_format: "json" // Explicitly request JSON
+    });
+
+    // Assuming response_format: "json", the text is directly available
+    const transcript = response.text;
+
+    return NextResponse.json({ text: transcript });
+
+  } catch (error: any) { // Catch specific error types if needed
+    console.error('Transcription API Error:', error);
+    // Log more detailed error info if available
+    if (error.response) {
+      console.error('Error Response Data:', error.response.data);
+      console.error('Error Response Status:', error.response.status);
+      console.error('Error Response Headers:', error.response.headers);
+    } else if (error.request) {
+      console.error('Error Request Data:', error.request);
+    } else {
+      console.error('Error Message:', error.message);
+    }
+    return NextResponse.json(
+      { error: 'Failed to transcribe audio', details: error.message || 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
+
+// Keep this config, it's necessary for FormData
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+</file>
+
+<file path="app/globals.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+}
+</file>
+
+<file path="app/layout.tsx">
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Create Next App",
+  description: "Generated by create next app",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body className="antialiased">
+        {children}
+      </body>
+    </html>
+  );
+}
+</file>
+
+<file path="postcss.config.mjs">
+const config = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+};
+
+export default config;
+</file>
+
+<file path="app/page.tsx">
+'use client';
+
+import { useState } from 'react';
+import { AudioRecorder } from './components/AudioRecorder'
+import ActionItemsTable from './components/ActionItemsTable';
+
+export default function Home() {
+  const [transcription, setTranscription] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [actionItems, setActionItems] = useState<any>(null);
+
+  const handleRecordingComplete = async (blob: Blob) => {
+    setIsLoading(true);
+    setError('');
+    
+    const formData = new FormData();
+    formData.append('audio', blob, 'recording.webm');
+
+    try {
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      
+      setTranscription(data.text);
+      await processTranscript(data.text);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const processTranscript = async (transcript: string) => {
+    try {
+      const response = await fetch('/api/process-transcript', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transcript }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process transcript');
+      }
+
+      const data = await response.json();
+      setActionItems(data);
+    } catch (error) {
+      console.error('Error processing transcript:', error);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
+        <div className="w-full max-w-2xl mx-auto flex flex-col items-center gap-8">
+          <h1 className="text-3xl sm:text-4xl font-bold text-center">
+            Voice to Text
+          </h1>
+
+          <div className="w-full flex flex-col items-center gap-8">
+            <div className="w-full max-w-md aspect-square flex items-center justify-center bg-white/50 dark:bg-gray-800/50 rounded-2xl backdrop-blur-sm shadow-lg">
+              <AudioRecorder onRecordingComplete={handleRecordingComplete} />
+            </div>
+            
+            {isLoading && (
+              <div className="flex items-center gap-3">
+                <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-t-blue-600 border-r-blue-600 border-b-blue-600 border-l-transparent"></div>
+                <span className="text-sm font-medium">Transcribing...</span>
+              </div>
+            )}
+
+            {error && (
+              <div className="w-full max-w-md p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            {transcription && !isLoading && (
+              <div className="w-full max-w-md">
+                <h2 className="text-lg font-semibold mb-2">Transcription</h2>
+                <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                  <p className="text-sm leading-relaxed">{transcription}</p>
+                </div>
+              </div>
+            )}
+
+            {actionItems && (
+              <div className="mt-8">
+                <h2 className="text-2xl font-bold mb-4">Action Items</h2>
+                <ActionItemsTable categories={actionItems.categories} />
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "todo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "@types/dom-mediacapture-record": "^1.0.14",
+    "lucide-react": "^0.484.0",
+    "next": "^14.1.0",
+    "openai": "^4.90.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5"
+  }
+}
+</file>
+
+</files>

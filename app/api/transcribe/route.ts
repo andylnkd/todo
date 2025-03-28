@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { type File } from 'openai/uploads'; // Import the File type if needed for casting
-import { File as WebFile } from 'node:fs';
+// import { type File } from 'openai/uploads'; // Import the File type if needed for casting
+// import { File as WebFile } from 'node:fs';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// New Next.js route configuration format
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,12 +30,14 @@ export async function POST(request: NextRequest) {
         type: audioFile.type
     });
 
+    const file = new File([audioFile], 'audio.webm', { type: audioFile.type });
+
     // --- Attempt to pass the Blob/File directly ---
     const response = await openai.audio.transcriptions.create({
       // The library might handle Blob/File directly. Cast to File if necessary.
       // It needs a name, which Blob doesn't inherently have, so File is better.
       // If it's just a Blob, you might need Solution 2.
-      file: audioFile as File, // Cast or ensure it IS a File object with a name
+      file: file,
       model: 'whisper-1',
       response_format: "json" // Explicitly request JSON
     });
