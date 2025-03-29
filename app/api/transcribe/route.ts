@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Keep this config, it's necessary for FormData
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// // Keep this config, it's necessary for FormData
+// export const config = {
+//   api: {
+//     bodyParser: false,
+//   },
+// };

@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+Always prefer short and local updates to start, allowing me to test changes and then, when they prove out spread them across the whole repo

@@ -1,64 +1,90 @@
-'use client';
+// Remove 'use client';
 
-import { useState } from 'react';
+// Import server-side dependencies
 import { UserButton } from '@clerk/nextjs';
-import { AudioRecorder } from '../components/AudioRecorder';
+import { auth } from '@clerk/nextjs/server'; // Correct import for server components
+import { redirect } from 'next/navigation';
+import { db } from '../../drizzle/db'; // Corrected path
+import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '../../drizzle/schema'; // Corrected path
+import { eq, desc } from 'drizzle-orm';
+
+// Import components
 import ActionItemsTable from '../components/ActionItemsTable';
-import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Loader2 } from 'lucide-react';
+import AudioRecorderWrapper from '../components/AudioRecorderWrapper'; // We will create this component
 
-export default function Dashboard() {
-  const [transcription, setTranscription] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [actionItems, setActionItems] = useState<any>(null);
+// Define the expected data structure for the table
+interface NextStep { 
+  actionItem: string; // Not really used here, but helps structure
+  nextSteps: string[];
+}
 
-  const handleRecordingComplete = async (blob: Blob) => {
-    setIsLoading(true);
-    setError('');
-    
-    const formData = new FormData();
-    formData.append('audio', blob, 'recording.webm');
+interface CategoryWithItems {
+  name: string;
+  items: NextStep[];
+}
 
-    try {
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
+// The main Dashboard page component is now async
+export default async function Dashboard() {
+  const { userId } = await auth();
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      
-      setTranscription(data.text);
-      await processTranscript(data.text);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
-    } finally {
-      setIsLoading(false);
+  if (!userId) {
+    redirect('/sign-in'); // Redirect if not logged in
+  }
+
+  // Fetch action items from the database
+  const userCategories = await db
+    .select({
+      categoryId: categoriesTable.id,
+      categoryName: categoriesTable.name,
+      actionItemId: actionItemsTable.id,
+      actionItemText: actionItemsTable.actionItem,
+      nextStepText: nextStepsTable.step,
+      actionItemCreatedAt: actionItemsTable.createdAt, // For ordering
+    })
+    .from(categoriesTable)
+    .leftJoin(actionItemsTable, eq(categoriesTable.id, actionItemsTable.categoryId))
+    .leftJoin(nextStepsTable, eq(actionItemsTable.id, nextStepsTable.actionItemId))
+    .where(eq(categoriesTable.userId, userId))
+    .orderBy(desc(actionItemsTable.createdAt), categoriesTable.name, actionItemsTable.id, nextStepsTable.id); // Consistent ordering
+
+  // Process the fetched data into the structure expected by ActionItemsTable
+  const actionItemsFormatted: CategoryWithItems[] = [];
+  const categoryMap = new Map<string, { name: string; items: Map<string, { actionItem: string; nextSteps: Set<string> }> }>();
+
+  for (const row of userCategories) {
+    if (!row.categoryId || !row.actionItemId) continue; // Skip if no action item
+
+    let category = categoryMap.get(row.categoryId);
+    if (!category) {
+      category = { name: row.categoryName!, items: new Map() };
+      categoryMap.set(row.categoryId, category);
     }
-  };
 
-  const processTranscript = async (transcript: string) => {
-    try {
-      const response = await fetch('/api/process-transcript', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ transcript }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process transcript');
-      }
-
-      const data = await response.json();
-      setActionItems(data);
-    } catch (error) {
-      console.error('Error processing transcript:', error);
+    let actionItem = category.items.get(row.actionItemId);
+    if (!actionItem) {
+      actionItem = { actionItem: row.actionItemText!, nextSteps: new Set() };
+      category.items.set(row.actionItemId, actionItem);
     }
-  };
+
+    if (row.nextStepText) {
+      actionItem.nextSteps.add(row.nextStepText);
+    }
+  }
+
+  // Convert maps to the final array structure
+  categoryMap.forEach(categoryData => {
+    const itemsArray: NextStep[] = [];
+    categoryData.items.forEach(itemData => {
+      itemsArray.push({ actionItem: itemData.actionItem, nextSteps: Array.from(itemData.nextSteps) });
+    });
+    // Sort items within category if needed, e.g., by actionItem text
+    // itemsArray.sort((a, b) => a.actionItem.localeCompare(b.actionItem)); 
+    actionItemsFormatted.push({ name: categoryData.name, items: itemsArray });
+  });
+  
+  // Sort categories by name
+  actionItemsFormatted.sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -71,49 +97,32 @@ export default function Dashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Record Voice Note</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AudioRecorder onRecordingComplete={handleRecordingComplete} />
-            </CardContent>
-          </Card>
+          {/* === Client Component for Recording === */}
+          <AudioRecorderWrapper />
+          {/* ===================================== */}
 
-          {isLoading && (
-            <div className="flex items-center justify-center gap-2">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Processing your recording...</span>
-            </div>
-          )}
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {transcription && !isLoading && (
+          {/* === Display Fetched Action Items === */}
+          {actionItemsFormatted.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Transcription</CardTitle>
+                <CardTitle>Your Action Items</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-700">{transcription}</p>
+                 {/* Pass the server-fetched data */}
+                <ActionItemsTable categories={actionItemsFormatted} />
               </CardContent>
             </Card>
-          )}
-
-          {actionItems && (
+          ) : (
             <Card>
-              <CardHeader>
+               <CardHeader>
                 <CardTitle>Action Items</CardTitle>
               </CardHeader>
               <CardContent>
-                <ActionItemsTable categories={actionItems.categories} />
+                 <p className="text-gray-500 text-center py-4">No action items found. Record a voice note to get started!</p>
               </CardContent>
             </Card>
           )}
+          {/* ===================================== */}
         </div>
       </main>
     </div>
