@@ -1,4 +1,12 @@
-import React from 'react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import { Card, CardContent } from "./ui/card";
 
 interface NextStep {
   actionItem: string;
@@ -18,41 +26,35 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories }) => {
   return (
     <div className="space-y-6">
       {categories.map((category, categoryIndex) => (
-        <div key={categoryIndex} className="bg-white rounded-lg shadow">
-          <div className="bg-blue-600 text-white px-4 py-2 rounded-t-lg">
-            <h2 className="text-xl font-semibold">{category.name}</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Action Item
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Next Steps
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+        <Card key={categoryIndex}>
+          <CardContent className="p-0">
+            <div className="bg-blue-50 p-4 border-b">
+              <h2 className="text-lg font-semibold text-blue-900">{category.name}</h2>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Action Item</TableHead>
+                  <TableHead>Next Steps</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {category.items.map((item, itemIndex) => (
-                  <tr key={itemIndex}>
-                    <td className="px-6 py-4 whitespace-normal">
-                      <div className="text-sm text-gray-900">{item.actionItem}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-normal">
-                      <ul className="list-disc list-inside text-sm text-gray-900">
+                  <TableRow key={itemIndex}>
+                    <TableCell className="font-medium">{item.actionItem}</TableCell>
+                    <TableCell>
+                      <ul className="list-disc list-inside space-y-1">
                         {item.nextSteps.map((step, stepIndex) => (
                           <li key={stepIndex}>{step}</li>
                         ))}
                       </ul>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

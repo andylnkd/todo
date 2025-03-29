@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-// import { type File } from 'openai/uploads'; // Import the File type if needed for casting
-// import { File as WebFile } from 'node:fs';
+import { auth } from '@clerk/nextjs/server';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// New Next.js route configuration format
-export const runtime = 'edge';
-export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  const { userId } = await auth();
+  
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const formData = await request.formData();
     // --- Check the key name 'audio' matches your frontend form ---

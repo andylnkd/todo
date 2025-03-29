@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { Button } from './ui/button';
+import { Mic, Square } from 'lucide-react';
 
 interface AudioRecorderProps {
   onRecordingComplete: (blob: Blob) => Promise<void>;
@@ -52,16 +54,23 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
       {error && (
         <p className="text-red-500 text-sm">{error}</p>
       )}
-      <button
+      <Button
         onClick={isRecording ? stopRecording : startRecording}
-        className={`rounded-full px-6 py-2 font-medium transition-colors ${
-          isRecording 
-            ? 'bg-red-500 hover:bg-red-600 text-white' 
-            : 'bg-blue-500 hover:bg-blue-600 text-white'
-        }`}
+        variant={isRecording ? "destructive" : "default"}
+        size="lg"
       >
-        {isRecording ? "Stop Recording" : "Start Recording"}
-      </button>
+        {isRecording ? (
+          <>
+            <Square className="mr-2 h-4 w-4" />
+            Stop Recording
+          </>
+        ) : (
+          <>
+            <Mic className="mr-2 h-4 w-4" />
+            Start Recording
+          </>
+        )}
+      </Button>
       {isRecording && (
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
