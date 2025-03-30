@@ -12,6 +12,7 @@ import { eq, desc } from 'drizzle-orm';
 import ActionItemsTable from '../components/ActionItemsTable';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import AudioRecorderWrapper from '../components/AudioRecorderWrapper'; // We will create this component
+import SendDashboardButton from '../components/SendDashboardButton'; // Use relative path
 
 // Define the expected data structure for the table
 interface NextStep { 
@@ -100,6 +101,10 @@ export default async function Dashboard() {
           {/* === Client Component for Recording === */}
           <AudioRecorderWrapper />
           {/* ===================================== */}
+          
+          {/* === Client Component for Sending Email === */}
+          <SendDashboardButton /> 
+          {/* ======================================== */}
 
           {/* === Display Fetched Action Items === */}
           {actionItemsFormatted.length > 0 ? (
