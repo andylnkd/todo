@@ -13,6 +13,7 @@ import ActionItemsTable from '../components/ActionItemsTable';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import AudioRecorderWrapper from '../components/AudioRecorderWrapper'; // We will create this component
 import SendDashboardButton from '../components/SendDashboardButton'; // Use relative path
+import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the new button
 
 // Define the expected data structure for the table
 interface NextStep { 
@@ -109,11 +110,11 @@ export default async function Dashboard() {
           {/* === Display Fetched Action Items === */}
           {actionItemsFormatted.length > 0 ? (
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle>Your Action Items</CardTitle>
+                <CopyMarkdownButton categories={actionItemsFormatted} />
               </CardHeader>
               <CardContent>
-                 {/* Pass the server-fetched data */}
                 <ActionItemsTable categories={actionItemsFormatted} />
               </CardContent>
             </Card>
