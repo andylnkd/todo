@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+Determine typical coding tasks and their complexity.
+
+Specify operations (code generation, refactoring, debugging, etc.).
+
+Remember, the goal is to keep the project as simple as possible and to add as few elements as possible. Every time you add a component think about how editable and modifiable it is through standard programs not through some custom programming we want the program to be as minimized as possible, while accomplishing the functionality desire.Use clear keywords/triggers linked to desired AI outcomes (e.g., "//generate function" -> create function).
+
+Describe the order of operations you would follow and be clear about assumptions you have made.
+Thanks through best practices and make sure that you propose them proactively where it makes sense.
+
+
+Provide clear instructions on rule usage for effective AI interaction.

@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
 
     // Assuming response_format: "json", the text is directly available
     const transcript = response.text;
+    console.log('Transcript:', transcript);
 
     return NextResponse.json({ text: transcript });
 

@@ -16,14 +16,22 @@ import SendDashboardButton from '../components/SendDashboardButton'; // Use rela
 import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the new button
 
 // Define the expected data structure for the table
-interface NextStep { 
-  actionItem: string; // Not really used here, but helps structure
-  nextSteps: string[];
+interface NextStepDetail {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+interface ActionItemWithNextSteps {
+  actionItemId: string;
+  actionItem: string;
+  nextSteps: NextStepDetail[];
 }
 
 interface CategoryWithItems {
+  id: string;
   name: string;
-  items: NextStep[];
+  items: ActionItemWithNextSteps[];
 }
 
 // The main Dashboard page component is now async
@@ -41,50 +49,71 @@ export default async function Dashboard() {
       categoryName: categoriesTable.name,
       actionItemId: actionItemsTable.id,
       actionItemText: actionItemsTable.actionItem,
+      nextStepId: nextStepsTable.id,
       nextStepText: nextStepsTable.step,
-      actionItemCreatedAt: actionItemsTable.createdAt, // For ordering
+      nextStepCompleted: nextStepsTable.completed,
+      actionItemCreatedAt: actionItemsTable.createdAt,
     })
     .from(categoriesTable)
     .leftJoin(actionItemsTable, eq(categoriesTable.id, actionItemsTable.categoryId))
     .leftJoin(nextStepsTable, eq(actionItemsTable.id, nextStepsTable.actionItemId))
     .where(eq(categoriesTable.userId, userId))
-    .orderBy(desc(actionItemsTable.createdAt), categoriesTable.name, actionItemsTable.id, nextStepsTable.id); // Consistent ordering
+    .orderBy(desc(actionItemsTable.createdAt), categoriesTable.name, actionItemsTable.id, nextStepsTable.id);
 
   // Process the fetched data into the structure expected by ActionItemsTable
   const actionItemsFormatted: CategoryWithItems[] = [];
-  const categoryMap = new Map<string, { name: string; items: Map<string, { actionItem: string; nextSteps: Set<string> }> }>();
+  const categoryMap = new Map<string, {
+    id: string;
+    name: string;
+    items: Map<string, {
+      id: string;
+      actionItem: string;
+      nextSteps: Map<string, NextStepDetail>;
+    }>;
+  }>();
 
   for (const row of userCategories) {
-    if (!row.categoryId || !row.actionItemId) continue; // Skip if no action item
+    if (!row.categoryId) continue;
 
     let category = categoryMap.get(row.categoryId);
     if (!category) {
-      category = { name: row.categoryName!, items: new Map() };
+      category = { id: row.categoryId, name: row.categoryName!, items: new Map() };
       categoryMap.set(row.categoryId, category);
     }
 
-    let actionItem = category.items.get(row.actionItemId);
-    if (!actionItem) {
-      actionItem = { actionItem: row.actionItemText!, nextSteps: new Set() };
-      category.items.set(row.actionItemId, actionItem);
-    }
+    if (row.actionItemId) {
+      let actionItem = category.items.get(row.actionItemId);
+      if (!actionItem) {
+        actionItem = { id: row.actionItemId, actionItem: row.actionItemText!, nextSteps: new Map() };
+        category.items.set(row.actionItemId, actionItem);
+      }
 
-    if (row.nextStepText) {
-      actionItem.nextSteps.add(row.nextStepText);
+      if (row.nextStepId && row.nextStepText !== null) {
+        if (!actionItem.nextSteps.has(row.nextStepId)) {
+          actionItem.nextSteps.set(row.nextStepId, {
+            id: row.nextStepId,
+            text: row.nextStepText,
+            completed: row.nextStepCompleted!,
+          });
+        }
+      }
     }
   }
 
   // Convert maps to the final array structure
   categoryMap.forEach(categoryData => {
-    const itemsArray: NextStep[] = [];
+    const itemsArray: ActionItemWithNextSteps[] = [];
     categoryData.items.forEach(itemData => {
-      itemsArray.push({ actionItem: itemData.actionItem, nextSteps: Array.from(itemData.nextSteps) });
+      const nextStepsArray = Array.from(itemData.nextSteps.values());
+      itemsArray.push({
+        actionItemId: itemData.id,
+        actionItem: itemData.actionItem,
+        nextSteps: nextStepsArray
+      });
     });
-    // Sort items within category if needed, e.g., by actionItem text
-    // itemsArray.sort((a, b) => a.actionItem.localeCompare(b.actionItem)); 
-    actionItemsFormatted.push({ name: categoryData.name, items: itemsArray });
+    actionItemsFormatted.push({ id: categoryData.id, name: categoryData.name, items: itemsArray });
   });
-  
+
   // Sort categories by name
   actionItemsFormatted.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -112,7 +141,7 @@ export default async function Dashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle>Your Action Items</CardTitle>
-                <CopyMarkdownButton categories={actionItemsFormatted} />
+                <CopyMarkdownButton categories={actionItemsFormatted as any} />
               </CardHeader>
               <CardContent>
                 <ActionItemsTable categories={actionItemsFormatted} />
