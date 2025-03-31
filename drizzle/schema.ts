@@ -14,7 +14,7 @@ export const actionItems = pgTable('action_items', {
   id: uuid('id').defaultRandom().primaryKey(),
   categoryId: uuid('category_id').references(() => categories.id).notNull(),
   actionItem: text('action_item').notNull(),
-  transcriptionId: uuid('transcription_id').references(() => transcriptions.id).notNull(),
+  transcriptionId: uuid('transcription_id').references(() => transcriptions.id),
   status: varchar('status', { length: 50 }).default('pending').notNull(),
   userId: varchar('user_id', { length: 255 }).notNull(), // Clerk user ID
   createdAt: timestamp('created_at').defaultNow().notNull(),

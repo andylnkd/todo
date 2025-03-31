@@ -1,0 +1,1 @@
+ALTER TABLE "action_items" ALTER COLUMN "transcription_id" DROP NOT NULL;

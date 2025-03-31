@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import AudioRecorderWrapper from '../components/AudioRecorderWrapper'; // We will create this component
 import SendDashboardButton from '../components/SendDashboardButton'; // Use relative path
 import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the new button
+import RefineListWrapper from '../components/RefineListWrapper'; // Add this import
 
 // Define the expected data structure for the table
 interface NextStepDetail {
@@ -141,7 +142,10 @@ export default async function Dashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle>Your Action Items</CardTitle>
-                <CopyMarkdownButton categories={actionItemsFormatted as any} />
+                <div className="flex items-center gap-2">
+                  <RefineListWrapper categories={actionItemsFormatted} />
+                  <CopyMarkdownButton categories={actionItemsFormatted as any} />
+                </div>
               </CardHeader>
               <CardContent>
                 <ActionItemsTable categories={actionItemsFormatted} />
