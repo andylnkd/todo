@@ -16,6 +16,7 @@ import AudioRecorderWrapper from '../components/AudioRecorderWrapper'; // We wil
 import SendDashboardButton from '../components/SendDashboardButton'; // Use relative path
 import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the new button
 import RefineListWrapper from '../components/RefineListWrapper'; // Add this import
+import SendWhatsAppButton from '../components/SendWhatsAppButton';
 
 // Define the expected data structure for the table
 interface NextStepDetail {
@@ -180,6 +181,7 @@ export default async function Dashboard() {
                 <div className="flex items-center gap-2">
                   <RefineListWrapper categories={actionItemsFormatted} />
                   <CopyMarkdownButton categories={actionItemsFormatted as any} />
+                  <SendWhatsAppButton categories={actionItemsFormatted} />
                 </div>
               </CardHeader>
               <CardContent>
