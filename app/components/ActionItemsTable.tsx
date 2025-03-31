@@ -1,17 +1,13 @@
 'use client'; // Make this a client component
 
-import React from 'react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
-import { Card, CardContent } from "./ui/card";
-import EditableActionItem from './EditableActionItem'; // Import the new component
+import React, { useState } from 'react';
+import EditableActionItem from './EditableActionItem'; // This should be removed too as it's replaced
 import { useRouter } from 'next/navigation'; // For refreshing data after update
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Button } from '@/components/ui/button';
+import EditableTextItem from './EditableTextItem'; // Import the renamed component
+import EditableNextStep from './EditableNextStep'; // Import the new component
+import { useToast } from '@/hooks/use-toast';
 
 // Define the detailed structure for a next step
 interface NextStepDetail {
@@ -37,10 +33,14 @@ interface Category {
 // Define the props for the table component
 interface ActionItemsTableProps {
   categories: Category[]; // Expect an array of the updated Category structure
+  onSaveCategory: (id: string, newName: string) => Promise<void>;
+  onSaveActionItem: (id: string, newText: string) => Promise<void>;
 }
 
-const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories }) => {
+const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem }) => {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -78,80 +78,80 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories }) => {
     router.refresh();
   };
 
-  // Function to handle saving next step edits
-  const handleSaveNextStep = async (id: string, newText: string) => {
-    // Call the API endpoint
-    const response = await fetch('/api/next-steps', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, step: newText }),
-    });
+  // Updated function to handle saving next steps (text and completion)
+  const handleSaveNextStep = async (id: string, newText: string, newCompleted: boolean) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/next-steps', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            id, 
+            step: newText,       // Send updated text
+            completed: newCompleted // Send updated completion status
+        }),
+      });
 
-    if (!response.ok) {
-      // Handle error
-      console.error('Failed to update next step');
-      throw new Error('Failed to update next step');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update next step');
+      }
+      // Toast is now handled within EditableNextStep, no need here
+    } catch (error) {
+      console.error("Failed to save next step:", error);
+      // Re-throw error to be caught in EditableNextStep for toast message
+      throw error; 
+    } finally {
+      setIsLoading(false);
     }
-    // Optionally refresh data or update state locally
-    router.refresh();
   };
 
   return (
-    <div className="space-y-6">
+    <Accordion type="multiple" className="w-full">
       {categories.map((category) => (
-        <Card key={category.id}> {/* Use category.id as key */}
-          <CardContent className="p-0">
-            <div className="bg-blue-50 p-4 border-b">
-              {/* Use EditableActionItem for category name */}
-              <EditableActionItem
-                id={category.id}
-                text={category.name}
-                type="category"
-                onSave={handleSaveCategory}
-              />
+        <AccordionItem key={category.id} value={`category-${category.id}`}>
+          <AccordionTrigger>
+            <div className="flex-1 mr-2">
+                {/* Use EditableTextItem for Category Name */}
+                <EditableTextItem 
+                    id={category.id}
+                    initialText={category.name}
+                    itemTypeLabel="Category"
+                    onSave={onSaveCategory}
+                />
             </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Action Item</TableHead>
-                  <TableHead>Next Steps</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {category.items.map((item) => (
-                  <TableRow key={item.actionItemId}> {/* Use item.actionItemId as key */}
-                    <TableCell className="font-medium">
-                      {/* Use EditableActionItem for action item text */}
-                      <EditableActionItem
-                        id={item.actionItemId}
-                        text={item.actionItem}
-                        type="actionItem"
-                        onSave={handleSaveActionItem}
+          </AccordionTrigger>
+          <AccordionContent>
+            {category.items.map((item) => (
+              <div key={item.actionItemId} className="ml-4 mb-4 p-4 border rounded-md">
+                {/* Use EditableTextItem for Action Item Text */}
+                <EditableTextItem 
+                    id={item.actionItemId}
+                    initialText={item.actionItem}
+                    itemTypeLabel="Action Item"
+                    onSave={onSaveActionItem}
+                />
+                <ul className="mt-2 space-y-1">
+                  {item.nextSteps.map((step) => (
+                    <li key={step.id}>
+                      {/* Use EditableNextStep for Next Steps */}
+                      <EditableNextStep 
+                        id={step.id}
+                        initialText={step.text}
+                        initialCompleted={step.completed}
+                        onSave={handleSaveNextStep}
                       />
-                    </TableCell>
-                    <TableCell>
-                      <ul className="list-disc list-inside space-y-1">
-                        {/* Map over the detailed next step objects */}
-                        {item.nextSteps.map((nextStepObj) => (
-                          <li key={nextStepObj.id}> {/* Use the next step ID */}
-                            <EditableActionItem
-                              id={nextStepObj.id}      // Pass ID
-                              text={nextStepObj.text}    // Pass text
-                              type="actionItem" // Consider a type="nextStep"?
-                              onSave={handleSaveNextStep} // Use the correct handler
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </AccordionContent>
+        </AccordionItem>
       ))}
-    </div>
+    </Accordion>
   );
 };
 

@@ -15,6 +15,13 @@
       "when": 1743429497181,
       "tag": "0001_soft_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1743429827960,
+      "tag": "0002_perpetual_vulture",
+      "breakpoints": true
     }
   ]
 }

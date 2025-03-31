@@ -5,6 +5,7 @@ export const categories = pgTable('categories', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   userId: varchar('user_id', { length: 255 }).notNull(), // Clerk user ID
+  status: varchar('status', { length: 50 }).default('active').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

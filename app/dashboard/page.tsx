@@ -6,7 +6,8 @@ import { auth } from '@clerk/nextjs/server'; // Correct import for server compon
 import { redirect } from 'next/navigation';
 import { db } from '../../drizzle/db'; // Corrected path
 import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '../../drizzle/schema'; // Corrected path
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache'; // Import for revalidation
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -34,6 +35,40 @@ interface CategoryWithItems {
   name: string;
   items: ActionItemWithNextSteps[];
 }
+
+// --- Server Actions for Saving ---
+async function saveCategoryName(id: string, newName: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.update(categoriesTable)
+      .set({ name: newName, updatedAt: new Date() })
+      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)));
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to save category:", error);
+    throw new Error("Failed to update category name.");
+  }
+}
+
+async function saveActionItemText(id: string, newText: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.update(actionItemsTable)
+      .set({ actionItem: newText, updatedAt: new Date() })
+      .where(and(eq(actionItemsTable.id, id), eq(actionItemsTable.userId, userId)));
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to save action item:", error);
+    throw new Error("Failed to update action item text.");
+  }
+}
+// --- End Server Actions ---
 
 // The main Dashboard page component is now async
 export default async function Dashboard() {
@@ -148,7 +183,11 @@ export default async function Dashboard() {
                 </div>
               </CardHeader>
               <CardContent>
-                <ActionItemsTable categories={actionItemsFormatted} />
+                <ActionItemsTable 
+                  categories={actionItemsFormatted} 
+                  onSaveCategory={saveCategoryName} 
+                  onSaveActionItem={saveActionItemText} 
+                />
               </CardContent>
             </Card>
           ) : (
