@@ -28,6 +28,7 @@ export const nextSteps = pgTable('next_steps', {
   actionItemId: uuid('action_item_id').references(() => actionItems.id).notNull(),
   step: text('step').notNull(),
   completed: boolean('completed').default(false).notNull(),
+  dueDate: timestamp('due_date'),
   userId: varchar('user_id', { length: 255 }).notNull(), // Clerk user ID
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

@@ -79,87 +79,78 @@ export default async function Dashboard() {
     redirect('/sign-in'); // Redirect if not logged in
   }
 
-  // Fetch action items from the database
-  const userCategories = await db
-    .select({
-      categoryId: categoriesTable.id,
-      categoryName: categoriesTable.name,
-      actionItemId: actionItemsTable.id,
-      actionItemText: actionItemsTable.actionItem,
-      nextStepId: nextStepsTable.id,
-      nextStepText: nextStepsTable.step,
-      nextStepCompleted: nextStepsTable.completed,
-      actionItemCreatedAt: actionItemsTable.createdAt,
-    })
+  // Fetch categories with items and next steps
+  const categories = await db
+    .select()
     .from(categoriesTable)
-    .leftJoin(actionItemsTable, eq(categoriesTable.id, actionItemsTable.categoryId))
-    .leftJoin(nextStepsTable, eq(actionItemsTable.id, nextStepsTable.actionItemId))
     .where(eq(categoriesTable.userId, userId))
-    .orderBy(desc(actionItemsTable.createdAt), categoriesTable.name, actionItemsTable.id, nextStepsTable.id);
-
-  // Process the fetched data into the structure expected by ActionItemsTable
-  const actionItemsFormatted: CategoryWithItems[] = [];
-  const categoryMap = new Map<string, {
-    id: string;
-    name: string;
-    items: Map<string, {
-      id: string;
-      actionItem: string;
-      nextSteps: Map<string, NextStepDetail>;
-    }>;
-  }>();
-
-  for (const row of userCategories) {
-    if (!row.categoryId) continue;
-
-    let category = categoryMap.get(row.categoryId);
-    if (!category) {
-      category = { id: row.categoryId, name: row.categoryName!, items: new Map() };
-      categoryMap.set(row.categoryId, category);
-    }
-
-    if (row.actionItemId) {
-      let actionItem = category.items.get(row.actionItemId);
-      if (!actionItem) {
-        actionItem = { id: row.actionItemId, actionItem: row.actionItemText!, nextSteps: new Map() };
-        category.items.set(row.actionItemId, actionItem);
-      }
-
-      if (row.nextStepId && row.nextStepText !== null) {
-        if (!actionItem.nextSteps.has(row.nextStepId)) {
-          actionItem.nextSteps.set(row.nextStepId, {
-            id: row.nextStepId,
-            text: row.nextStepText,
-            completed: row.nextStepCompleted!,
+    .leftJoin(
+      actionItemsTable,
+      eq(categoriesTable.id, actionItemsTable.categoryId)
+    )
+    .leftJoin(
+      nextStepsTable,
+      eq(actionItemsTable.id, nextStepsTable.actionItemId)
+    )
+    .then((rows) => {
+      // Process the rows into a nested structure
+      const categoriesMap = new Map();
+      
+      rows.forEach((row) => {
+        if (!row.categories) return;
+        
+        const categoryId = row.categories.id;
+        if (!categoriesMap.has(categoryId)) {
+          categoriesMap.set(categoryId, {
+            id: categoryId,
+            name: row.categories.name,
+            items: new Map()
           });
         }
-      }
-    }
-  }
-
-  // Convert maps to the final array structure
-  categoryMap.forEach(categoryData => {
-    const itemsArray: ActionItemWithNextSteps[] = [];
-    categoryData.items.forEach(itemData => {
-      const nextStepsArray = Array.from(itemData.nextSteps.values());
-      itemsArray.push({
-        actionItemId: itemData.id,
-        actionItem: itemData.actionItem,
-        nextSteps: nextStepsArray
+        
+        const category = categoriesMap.get(categoryId);
+        
+        if (row.action_items) {
+          const actionItemId = row.action_items.id;
+          if (!category.items.has(actionItemId)) {
+            category.items.set(actionItemId, {
+              actionItemId,
+              actionItem: row.action_items.actionItem,
+              nextSteps: []
+            });
+          }
+          
+          if (row.next_steps) {
+            const nextStep = {
+              id: row.next_steps.id,
+              text: row.next_steps.step,
+              completed: row.next_steps.completed,
+              dueDate: row.next_steps.dueDate ? new Date(row.next_steps.dueDate) : null
+            };
+            category.items.get(actionItemId).nextSteps.push(nextStep);
+          }
+        }
       });
+      
+      // Convert Maps to arrays for the final structure
+      return Array.from(categoriesMap.values()).map(category => ({
+        ...category,
+        items: Array.from(category.items.values())
+      }));
     });
-    actionItemsFormatted.push({ id: categoryData.id, name: categoryData.name, items: itemsArray });
-  });
 
   // Sort categories by name
-  actionItemsFormatted.sort((a, b) => a.name.localeCompare(b.name));
+  categories.sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b bg-white">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Voice Notes Dashboard</h1>
-          <UserButton afterSignOutUrl="/" />
+          <div className="w-10" /> {/* Spacer to help center the title */}
+          <h1 className="text-2xl font-bold">Produktive Dashboard</h1>
+          <div className="w-10">
+            <UserButton afterSignOutUrl="/" />
+          </div>
         </div>
       </header>
 
@@ -174,19 +165,19 @@ export default async function Dashboard() {
           {/* ======================================== */}
 
           {/* === Display Fetched Action Items === */}
-          {actionItemsFormatted.length > 0 ? (
+          {categories.length > 0 ? (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle>Your Action Items</CardTitle>
                 <div className="flex items-center gap-2">
-                  <RefineListWrapper categories={actionItemsFormatted} />
-                  <CopyMarkdownButton categories={actionItemsFormatted as any} />
-                  <SendWhatsAppButton categories={actionItemsFormatted} />
+                  <RefineListWrapper categories={categories} />
+                  <CopyMarkdownButton categories={categories as any} />
+                  <SendWhatsAppButton categories={categories} />
                 </div>
               </CardHeader>
               <CardContent>
                 <ActionItemsTable 
-                  categories={actionItemsFormatted} 
+                  categories={categories} 
                   onSaveCategory={saveCategoryName} 
                   onSaveActionItem={saveActionItemText} 
                 />

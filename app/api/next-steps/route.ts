@@ -106,38 +106,50 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, step, completed } = body; // Add completed to destructuring
+    const { id, step, completed, dueDate } = body;
 
     // Validate required fields
     if (!id) {
       return NextResponse.json({ error: 'Missing next step ID' }, { status: 400 });
     }
     // Validate that at least one field to update is provided
-    if (step === undefined && completed === undefined) {
-        return NextResponse.json({ error: 'Missing fields to update (step or completed required)' }, { status: 400 });
+    if (step === undefined && completed === undefined && dueDate === undefined) {
+        return NextResponse.json({ error: 'Missing fields to update (step, completed, or dueDate required)' }, { status: 400 });
     }
 
     // Prepare the update object conditionally
-    const updateData: Partial<{ step: string; completed: boolean; updatedAt: Date }> = {};
+    const updateData: Partial<{ step: string; completed: boolean; dueDate: Date | null; updatedAt: Date }> = {};
     if (step !== undefined) {
         updateData.step = step;
     }
     if (completed !== undefined) {
         updateData.completed = completed;
     }
+    if (dueDate !== undefined) {
+        // Properly handle date conversion, ensuring it's stored as a timestamp
+        updateData.dueDate = dueDate ? new Date(dueDate) : null;
+        console.log('Storing due date:', updateData.dueDate); // Debug log
+    }
     updateData.updatedAt = new Date(); // Always update timestamp
 
     // Ensure the user owns the next step being updated
     const [updatedNextStep] = await db
-      .update(nextStepsTable) // Use table alias
+      .update(nextStepsTable)
       .set(updateData)
-      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId))) // Use table alias
+      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId)))
       .returning();
 
     if (!updatedNextStep) {
-      // Either the step doesn't exist or the user doesn't own it
       return NextResponse.json({ error: 'Next step not found or access denied' }, { status: 404 });
     }
+
+    // Convert dates to ISO strings for JSON response
+    const response = {
+      ...updatedNextStep,
+      dueDate: updatedNextStep.dueDate ? updatedNextStep.dueDate.toISOString() : null,
+      createdAt: updatedNextStep.createdAt.toISOString(),
+      updatedAt: updatedNextStep.updatedAt.toISOString(),
+    };
 
     // --- Call the status check logic --- 
     // Only check if the completion status was part of the update and potentially changed
@@ -152,7 +164,7 @@ export async function PATCH(request: NextRequest) {
     }
     // --- End status check logic ---
 
-    return NextResponse.json(updatedNextStep);
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Error updating next step:', error);

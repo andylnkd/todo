@@ -1,6 +1,6 @@
 'use client'; // Make this a client component
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import EditableActionItem from './EditableActionItem'; // This should be removed too as it's replaced
 import { useRouter } from 'next/navigation'; // For refreshing data after update
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -9,13 +9,22 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { Search, ArrowUpDown } from 'lucide-react';
+import { format } from 'date-fns';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Define the detailed structure for a next step
 interface NextStepDetail {
   id: string;
   text: string;
-  completed: boolean; // Keep track of completion status
+  completed: boolean;
+  dueDate?: Date | null;
 }
 
 // Define the structure for an action item, containing its details and next steps
@@ -39,6 +48,8 @@ interface ActionItemsTableProps {
   onSaveActionItem: (id: string, newText: string) => Promise<void>;
 }
 
+type SortOption = 'dueDate' | 'name' | 'recent';
+
 const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem }) => {
   const router = useRouter();
   const { toast } = useToast();
@@ -46,6 +57,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Category[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('dueDate');
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -83,8 +95,8 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     router.refresh();
   };
 
-  // Updated function to handle saving next steps (text and completion)
-  const handleSaveNextStep = async (id: string, newText: string, newCompleted: boolean) => {
+  // Updated function to handle saving next steps (text, completion, and due date)
+  const handleSaveNextStep = async (id: string, newText: string, newCompleted: boolean, newDueDate: Date | null) => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/next-steps', {
@@ -93,9 +105,10 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-            id, 
-            step: newText,       // Send updated text
-            completed: newCompleted // Send updated completion status
+          id, 
+          step: newText,
+          completed: newCompleted,
+          dueDate: newDueDate
         }),
       });
 
@@ -103,11 +116,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to update next step');
       }
-      // Toast is now handled within EditableNextStep, no need here
     } catch (error) {
       console.error("Failed to save next step:", error);
-      // Re-throw error to be caught in EditableNextStep for toast message
-      throw error; 
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -142,26 +153,97 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     return () => clearTimeout(searchTimeout);
   }, [searchQuery, toast]);
 
+  // Function to get the earliest due date from a category
+  const getEarliestDueDate = (category: Category): Date | null => {
+    let earliestDate: Date | null = null;
+    
+    for (const item of category.items) {
+      for (const step of item.nextSteps) {
+        if (step.dueDate) {
+          const stepDate = new Date(step.dueDate);
+          if (!earliestDate || stepDate < earliestDate) {
+            earliestDate = stepDate;
+          }
+        }
+      }
+    }
+    
+    return earliestDate;
+  };
+
+  // Sort categories based on selected sort option
+  const sortedCategories = useMemo(() => {
+    const categoriesToSort = [...(searchQuery.trim() ? searchResults : categories)];
+    
+    switch (sortBy) {
+      case 'dueDate':
+        return categoriesToSort.sort((a, b) => {
+          const dateA = getEarliestDueDate(a);
+          const dateB = getEarliestDueDate(b);
+          
+          if (dateA && !dateB) return -1;
+          if (!dateA && dateB) return 1;
+          if (!dateA && !dateB) return 0;
+          
+          return dateA!.getTime() - dateB!.getTime();
+        });
+      
+      case 'name':
+        return categoriesToSort.sort((a, b) => 
+          a.name.localeCompare(b.name)
+        );
+      
+      case 'recent':
+        // Assuming items are already in chronological order
+        return categoriesToSort;
+      
+      default:
+        return categoriesToSort;
+    }
+  }, [categories, searchResults, searchQuery, sortBy]);
+
   const displayCategories = searchQuery.trim() ? searchResults : categories;
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Input
-          type="text"
-          placeholder="Search items..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
-        <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1">
+          <Input
+            type="text"
+            placeholder="Search items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+          <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+        </div>
+        <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+          <SelectTrigger className="w-[180px]">
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="h-4 w-4" />
+              <SelectValue placeholder="Sort by..." />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="dueDate">Due Date</SelectItem>
+            <SelectItem value="name">Category Name</SelectItem>
+            <SelectItem value="recent">Recently Added</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       
       <Accordion type="multiple" className="w-full">
-        {displayCategories.map((category) => (
+        {sortedCategories.map((category) => (
           <AccordionItem key={category.id} value={`category-${category.id}`}>
             <AccordionTrigger>
-              <span className="flex-1 text-left mr-2">{category.name}</span>
+              <div className="flex items-center justify-between flex-1 mr-2">
+                <span className="text-left">{category.name}</span>
+                {getEarliestDueDate(category) && (
+                  <span className="text-sm text-muted-foreground">
+                    Due: {format(getEarliestDueDate(category)!, 'MMM d')}
+                  </span>
+                )}
+              </div>
             </AccordionTrigger>
             <AccordionContent>
               <div className="mb-4 font-medium"> 
@@ -184,11 +266,11 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                   <ul className="mt-2 space-y-1">
                     {item.nextSteps.map((step) => (
                       <li key={step.id}>
-                        {/* Use EditableNextStep for Next Steps */}
                         <EditableNextStep 
                           id={step.id}
                           initialText={step.text}
                           initialCompleted={step.completed}
+                          initialDueDate={step.dueDate}
                           onSave={handleSaveNextStep}
                         />
                       </li>

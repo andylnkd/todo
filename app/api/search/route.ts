@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@clerk/nextjs/server';
-import { db } from '../../../lib/db';
+import { db } from '../../../drizzle/db';
 import { and, eq, ilike, or } from 'drizzle-orm';
-import { categories, actionItems, nextSteps } from '../../../lib/db/schema';
+import { categories, actionItems, nextSteps } from '../../../drizzle/schema';
 
 export async function GET(req: NextRequest) {
     try {
