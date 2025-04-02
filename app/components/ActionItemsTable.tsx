@@ -1,6 +1,6 @@
 'use client'; // Make this a client component
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import EditableActionItem from './EditableActionItem'; // This should be removed too as it's replaced
 import { useRouter } from 'next/navigation'; // For refreshing data after update
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import EditableTextItem from './EditableTextItem'; // Import the renamed component
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
 
 // Define the detailed structure for a next step
 interface NextStepDetail {
@@ -41,6 +43,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Category[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -108,50 +113,94 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     }
   };
 
+  // Add search handler
+  useEffect(() => {
+    const searchTimeout = setTimeout(async () => {
+      if (searchQuery.trim()) {
+        setIsSearching(true);
+        try {
+          const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery.trim())}`);
+          if (!response.ok) {
+            throw new Error('Search failed');
+          }
+          const results = await response.json();
+          setSearchResults(results);
+        } catch (error) {
+          toast({
+            title: "Search failed",
+            description: "Could not perform search. Please try again.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setSearchResults([]);
+      }
+    }, 300); // Debounce search
+
+    return () => clearTimeout(searchTimeout);
+  }, [searchQuery, toast]);
+
+  const displayCategories = searchQuery.trim() ? searchResults : categories;
+
   return (
-    <Accordion type="multiple" className="w-full">
-      {categories.map((category) => (
-        <AccordionItem key={category.id} value={`category-${category.id}`}>
-          <AccordionTrigger>
-            <div className="flex-1 mr-2">
-                {/* Use EditableTextItem for Category Name */}
-                <EditableTextItem 
-                    id={category.id}
-                    initialText={category.name}
-                    itemTypeLabel="Category"
-                    onSave={onSaveCategory}
-                />
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            {category.items.map((item) => (
-              <div key={item.actionItemId} className="ml-4 mb-4 p-4 border rounded-md">
-                {/* Use EditableTextItem for Action Item Text */}
-                <EditableTextItem 
-                    id={item.actionItemId}
-                    initialText={item.actionItem}
-                    itemTypeLabel="Action Item"
-                    onSave={onSaveActionItem}
-                />
-                <ul className="mt-2 space-y-1">
-                  {item.nextSteps.map((step) => (
-                    <li key={step.id}>
-                      {/* Use EditableNextStep for Next Steps */}
-                      <EditableNextStep 
-                        id={step.id}
-                        initialText={step.text}
-                        initialCompleted={step.completed}
-                        onSave={handleSaveNextStep}
-                      />
-                    </li>
-                  ))}
-                </ul>
+    <div className="space-y-4">
+      <div className="relative">
+        <Input
+          type="text"
+          placeholder="Search items..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+        <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+      </div>
+      
+      <Accordion type="multiple" className="w-full">
+        {displayCategories.map((category) => (
+          <AccordionItem key={category.id} value={`category-${category.id}`}>
+            <AccordionTrigger>
+              <span className="flex-1 text-left mr-2">{category.name}</span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="mb-4 font-medium"> 
+                  <EditableTextItem 
+                      id={category.id}
+                      initialText={category.name}
+                      itemTypeLabel="Category"
+                      onSave={onSaveCategory}
+                  />
               </div>
-            ))}
-          </AccordionContent>
-        </AccordionItem>
-      ))}
-    </Accordion>
+              {category.items.map((item) => (
+                <div key={item.actionItemId} className="ml-4 mb-4 p-4 border rounded-md">
+                  {/* Use EditableTextItem for Action Item Text */}
+                  <EditableTextItem 
+                      id={item.actionItemId}
+                      initialText={item.actionItem}
+                      itemTypeLabel="Action Item"
+                      onSave={onSaveActionItem}
+                  />
+                  <ul className="mt-2 space-y-1">
+                    {item.nextSteps.map((step) => (
+                      <li key={step.id}>
+                        {/* Use EditableNextStep for Next Steps */}
+                        <EditableNextStep 
+                          id={step.id}
+                          initialText={step.text}
+                          initialCompleted={step.completed}
+                          onSave={handleSaveNextStep}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </div>
   );
 };
 
