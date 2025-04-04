@@ -10,6 +10,7 @@ import { Edit2, Check, X, Calendar as CalendarIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/utils';
 import { format } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface EditableNextStepProps {
   id: string;
@@ -101,7 +102,12 @@ export default function EditableNextStep({
   if (isEditing) {
     return (
       <div className="flex items-center gap-2 pl-8">
-        <Checkbox id={`edit-check-${id}`} checked={isChecked} disabled className="opacity-50"/>
+        <Checkbox 
+          id={`edit-check-${id}`} 
+          checked={isChecked} 
+          disabled 
+          className="opacity-50 border-muted data-[state=checked]:bg-muted data-[state=checked]:text-muted-foreground"
+        />
         <Input
           value={editedText}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditedText(e.target.value)}
@@ -133,12 +139,22 @@ export default function EditableNextStep({
 
   return (
     <div className="flex items-center gap-2 group pl-8">
-      <Checkbox 
-        id={`view-check-${id}`} 
-        checked={isChecked} 
-        onCheckedChange={handleCheckboxChange}
-        disabled={isLoading}
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center">
+            <Checkbox 
+              id={`view-check-${id}`} 
+              checked={isChecked} 
+              onCheckedChange={handleCheckboxChange}
+              disabled={isLoading}
+              className="border-muted data-[state=checked]:bg-green-600 data-[state=checked]:text-white transition-colors"
+            />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Mark as completed</p>
+        </TooltipContent>
+      </Tooltip>
       <label 
         htmlFor={`view-check-${id}`}
         className={cn(

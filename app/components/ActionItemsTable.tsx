@@ -18,6 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from '@/components/ui/checkbox';
+import { useSelectedItems } from '../context/SelectedItemsContext';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/app/utils';
 
 // Define the detailed structure for a next step
 interface NextStepDetail {
@@ -58,6 +62,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const [searchResults, setSearchResults] = useState<Category[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('dueDate');
+  const { toggleItem, isSelected } = useSelectedItems();
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -232,56 +237,70 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         </Select>
       </div>
       
-      <Accordion type="multiple" className="w-full">
-        {sortedCategories.map((category) => (
-          <AccordionItem key={category.id} value={`category-${category.id}`}>
-            <AccordionTrigger>
-              <div className="flex items-center justify-between flex-1 mr-2">
-                <span className="text-left">{category.name}</span>
-                {getEarliestDueDate(category) && (
-                  <span className="text-sm text-muted-foreground">
-                    Due: {format(getEarliestDueDate(category)!, 'MMM d')}
-                  </span>
-                )}
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="mb-4 font-medium"> 
-                  <EditableTextItem 
-                      id={category.id}
-                      initialText={category.name}
-                      itemTypeLabel="Category"
-                      onSave={onSaveCategory}
-                  />
-              </div>
-              {category.items.map((item) => (
-                <div key={item.actionItemId} className="ml-4 mb-4 p-4 border rounded-md">
-                  {/* Use EditableTextItem for Action Item Text */}
-                  <EditableTextItem 
-                      id={item.actionItemId}
-                      initialText={item.actionItem}
-                      itemTypeLabel="Action Item"
-                      onSave={onSaveActionItem}
-                  />
-                  <ul className="mt-2 space-y-1">
-                    {item.nextSteps.map((step) => (
-                      <li key={step.id}>
-                        <EditableNextStep 
-                          id={step.id}
-                          initialText={step.text}
-                          initialCompleted={step.completed}
-                          initialDueDate={step.dueDate}
-                          onSave={handleSaveNextStep}
-                        />
-                      </li>
-                    ))}
-                  </ul>
+      <TooltipProvider>
+        <Accordion type="multiple" className="w-full">
+          {sortedCategories.map((category) => (
+            <AccordionItem key={category.id} value={category.id}>
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex-1 text-left">
+                  {category.name}
                 </div>
-              ))}
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="mb-4">
+                  <EditableTextItem
+                    id={category.id}
+                    initialText={category.name}
+                    onSave={onSaveCategory}
+                    itemTypeLabel="Category"
+                  />
+                </div>
+                <div className="space-y-4 mt-2">
+                  {category.items.map((item) => (
+                    <div key={item.actionItemId} className={`space-y-2 p-3 rounded-lg transition-colors ${isSelected(item.actionItemId) ? 'bg-secondary/30' : ''}`}>
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center">
+                              <Checkbox
+                                id={`select-${item.actionItemId}`}
+                                checked={isSelected(item.actionItemId)}
+                                onCheckedChange={() => toggleItem(item.actionItemId)}
+                                className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Select for sharing</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <EditableTextItem
+                          id={item.actionItemId}
+                          initialText={item.actionItem}
+                          onSave={onSaveActionItem}
+                          itemTypeLabel="Action Item"
+                        />
+                      </div>
+                      <div className="space-y-1 pl-7">
+                        {item.nextSteps.map((nextStep) => (
+                          <EditableNextStep
+                            key={nextStep.id}
+                            id={nextStep.id}
+                            initialText={nextStep.text}
+                            initialCompleted={nextStep.completed}
+                            initialDueDate={nextStep.dueDate}
+                            onSave={handleSaveNextStep}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </TooltipProvider>
     </div>
   );
 };

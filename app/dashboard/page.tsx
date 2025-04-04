@@ -17,6 +17,7 @@ import SendDashboardButton from '../components/SendDashboardButton'; // Use rela
 import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the new button
 import RefineListWrapper from '../components/RefineListWrapper'; // Add this import
 import SendWhatsAppButton from '../components/SendWhatsAppButton';
+import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 
 // Define the expected data structure for the table
 interface NextStepDetail {
@@ -156,44 +157,46 @@ export default async function Dashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
-          {/* === Client Component for Recording === */}
-          <AudioRecorderWrapper />
-          {/* ===================================== */}
-          
-          {/* === Client Component for Sending Email === */}
-          <SendDashboardButton /> 
-          {/* ======================================== */}
+          <SelectedItemsProvider>
+            {/* === Client Component for Recording === */}
+            <AudioRecorderWrapper />
+            {/* ===================================== */}
+            
+            {/* === Client Component for Sending Email === */}
+            <SendDashboardButton /> 
+            {/* ======================================== */}
 
-          {/* === Display Fetched Action Items === */}
-          {categories.length > 0 ? (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle>Your Action Items</CardTitle>
-                <div className="flex items-center gap-2">
-                  <RefineListWrapper categories={categories} />
-                  <CopyMarkdownButton categories={categories as any} />
-                  <SendWhatsAppButton categories={categories} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ActionItemsTable 
-                  categories={categories} 
-                  onSaveCategory={saveCategoryName} 
-                  onSaveActionItem={saveActionItemText} 
-                />
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-               <CardHeader>
-                <CardTitle>Action Items</CardTitle>
-              </CardHeader>
-              <CardContent>
-                 <p className="text-gray-500 text-center py-4">No action items found. Record a voice note to get started!</p>
-              </CardContent>
-            </Card>
-          )}
-          {/* ===================================== */}
+            {/* === Display Fetched Action Items === */}
+            {categories.length > 0 ? (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle>Your Action Items</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <RefineListWrapper categories={categories} />
+                    <CopyMarkdownButton categories={categories as any} />
+                    <SendWhatsAppButton categories={categories} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ActionItemsTable 
+                    categories={categories} 
+                    onSaveCategory={saveCategoryName} 
+                    onSaveActionItem={saveActionItemText} 
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                 <CardHeader>
+                  <CardTitle>Action Items</CardTitle>
+                </CardHeader>
+                <CardContent>
+                   <p className="text-gray-500 text-center py-4">No action items found. Record a voice note to get started!</p>
+                </CardContent>
+              </Card>
+            )}
+            {/* ===================================== */}
+          </SelectedItemsProvider>
         </div>
       </main>
     </div>

@@ -1,92 +1,117 @@
 'use client';
 
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { MessageCircle } from "lucide-react";
-import { useState } from "react";
+import { Button } from '@/components/ui/button';
+import { MessageCircle } from 'lucide-react';
+import { useSelectedItems } from '../context/SelectedItemsContext';
+import { useToast } from '@/hooks/use-toast';
 
 interface SendWhatsAppButtonProps {
-  categories: {
-    id: string;
+  categories: Array<{
     name: string;
-    items: {
+    items: Array<{
       actionItemId: string;
       actionItem: string;
-      nextSteps: {
-        id: string;
+      nextSteps: Array<{
         text: string;
         completed: boolean;
-      }[];
-    }[];
-  }[];
+        dueDate?: Date | null;
+      }>;
+    }>;
+  }>;
 }
 
 export default function SendWhatsAppButton({ categories }: SendWhatsAppButtonProps) {
+  const { selectedItems, clearSelection } = useSelectedItems();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
 
-  const formatMessage = () => {
-    let message = "*My Action Items:*\n\n";
+  const formatMessage = (categories: SendWhatsAppButtonProps['categories']) => {
+    let message = '📋 *Selected Action Items:*\n\n';
     
     categories.forEach(category => {
-      message += `*${category.name}:*\n`;
-      category.items.forEach(item => {
-        message += `- ${item.actionItem}\n`;
-        item.nextSteps.forEach(step => {
-          message += `  • ${step.text}\n`;
+      const selectedItemsInCategory = category.items.filter(item => 
+        selectedItems.has(item.actionItemId)
+      );
+
+      if (selectedItemsInCategory.length > 0) {
+        message += `*${category.name}*\n`;
+        selectedItemsInCategory.forEach(item => {
+          message += `• ${item.actionItem}\n`;
+          if (item.nextSteps.length > 0) {
+            message += '  Next Steps:\n';
+            item.nextSteps.forEach(step => {
+              const status = step.completed ? '✅' : '⭕';
+              const dueDate = step.dueDate ? ` (Due: ${new Date(step.dueDate).toLocaleDateString()})` : '';
+              message += `  ${status} ${step.text}${dueDate}\n`;
+            });
+          }
+          message += '\n';
         });
-      });
-      message += "\n";
+      }
     });
 
-    // Truncate if message is too long
-    if (message.length > 2000) {
-      message = message.substring(0, 1997) + "...";
-      toast({
-        title: "Message Truncated",
-        description: "The message was too long and has been shortened.",
-        variant: "destructive",
-      });
+    // If no items are selected, return null
+    if (message === '📋 *Selected Action Items:*\n\n') {
+      return null;
     }
 
-    return encodeURIComponent(message);
+    // Ensure message doesn't exceed WhatsApp's URL length limit (~2000 chars)
+    if (message.length > 2000) {
+      message = message.substring(0, 1950) + '...\n\n(Message truncated due to length)';
+    }
+
+    return message;
   };
 
   const handleSend = () => {
-    setIsLoading(true);
-    try {
-      const phoneNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "1234567890"; // Default number or from env
-      const message = formatMessage();
-      const url = `https://wa.me/${phoneNumber}?text=${message}`;
-      
-      window.open(url, "_blank");
-    } catch (error) {
+    if (selectedItems.size === 0) {
       toast({
-        title: "Error",
-        description: "Failed to prepare WhatsApp message.",
+        title: "No items selected",
+        description: "Please select at least one action item to send.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
+      return;
     }
+
+    const message = formatMessage(categories);
+    if (!message) {
+      toast({
+        title: "No items to send",
+        description: "Please select at least one action item to send.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Get WhatsApp number from environment variable
+    const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER;
+    if (!whatsappNumber) {
+      toast({
+        title: "Configuration error",
+        description: "WhatsApp number not configured.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Construct WhatsApp URL
+    const url = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+    
+    // Open WhatsApp in a new tab
+    window.open(url, '_blank');
+    
+    // Clear selection after sending
+    clearSelection();
   };
 
   return (
     <Button
       variant="outline"
+      size="sm"
       onClick={handleSend}
-      disabled={isLoading || categories.length === 0}
+      className="flex items-center gap-2"
     >
-      {isLoading ? (
-        <div className="flex items-center">
-          <span className="mr-2">Preparing...</span>
-        </div>
-      ) : (
-        <div className="flex items-center">
-          <MessageCircle className="mr-2 h-4 w-4" />
-          <span>Send via WhatsApp</span>
-        </div>
-      )}
+      <MessageCircle className="h-4 w-4" />
+      <span>Send to WhatsApp{selectedItems.size > 0 ? ` (${selectedItems.size})` : ''}</span>
     </Button>
   );
 } 

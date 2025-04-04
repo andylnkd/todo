@@ -1,87 +1,65 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Label } from '@/components/ui/label';
-import { Loader2, Mail } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useSelectedItems } from '../context/SelectedItemsContext';
 
 export default function SendDashboardButton() {
-  const [additionalEmail, setAdditionalEmail] = useState('');
-  const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const { selectedItems, clearSelection } = useSelectedItems();
 
-  const handleSendEmail = async () => {
-    startTransition(async () => {
-        const emailsToSend = additionalEmail.split(/[,\s]+/).filter(email => email.trim() !== '' && /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email.trim()));
+  const handleSend = async () => {
+    if (selectedItems.size === 0) {
+      toast({
+        title: "No items selected",
+        description: "Please select at least one action item to send.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      try {
-        const response = await fetch('/api/send-dashboard', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          // Send emails only if there are any valid ones
-          body: JSON.stringify({ emails: emailsToSend.length > 0 ? emailsToSend : undefined }),
-        });
+    try {
+      const response = await fetch('/api/send-dashboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          selectedItems: Array.from(selectedItems)
+        }),
+      });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to send email');
-        }
-
-        toast({
-          title: 'Email Sent',
-          description: `Dashboard sent successfully. ${data.resendId ? `(ID: ${data.resendId})` : ''}`,
-        });
-        setAdditionalEmail(''); // Clear input on success
-      } catch (error) {
-        console.error('Send email error:', error);
-        toast({
-          title: 'Error Sending Email',
-          description: error instanceof Error ? error.message : 'An unknown error occurred',
-          variant: 'destructive',
-        });
+      if (!response.ok) {
+        throw new Error('Failed to send dashboard');
       }
-    });
+
+      toast({
+        title: 'Success',
+        description: 'Selected items sent successfully!',
+      });
+
+      // Clear selection after successful send
+      clearSelection();
+    } catch (error) {
+      console.error('Error sending dashboard:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to send dashboard. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
-    <Card>
-        <CardHeader>
-            <CardTitle>Email Dashboard</CardTitle>
-            <CardDescription>Send a copy of your action items to yourself and optionally others.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div>
-                <Label htmlFor="additional-email">Additional Emails (optional, comma-separated)</Label>
-                <Input
-                    id="additional-email"
-                    type="text" // Changed to text to allow comma separation
-                    placeholder="friend@example.com, colleague@work.com"
-                    value={additionalEmail}
-                    onChange={(e) => setAdditionalEmail(e.target.value)}
-                    disabled={isPending}
-                    className="mt-1"
-                />
-            </div>
-            <Button onClick={handleSendEmail} disabled={isPending} className="w-full sm:w-auto">
-                {isPending ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Sending...
-                    </>
-                ) : (
-                    <>
-                        <Mail className="mr-2 h-4 w-4" />
-                        Send Email
-                    </>
-                )}
-            </Button>
-        </CardContent>
-    </Card>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleSend}
+      className="flex items-center gap-2"
+    >
+      <Mail className="h-4 w-4" />
+      <span>Send to Email{selectedItems.size > 0 ? ` (${selectedItems.size})` : ''}</span>
+    </Button>
   );
 } 
