@@ -49,6 +49,13 @@ export default function RefineListWrapper({ categories }: RefineListWrapperProps
       router.refresh();
     } catch (error) {
       console.error('Failed to apply refinements:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to apply refinements",
+        variant: "destructive",
+      });
+    } finally {
+      setIsApplying(false);
     }
   };
 

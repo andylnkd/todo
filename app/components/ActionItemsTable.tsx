@@ -50,11 +50,19 @@ interface ActionItemsTableProps {
   categories: Category[]; // Expect an array of the updated Category structure
   onSaveCategory: (id: string, newName: string) => Promise<void>;
   onSaveActionItem: (id: string, newText: string) => Promise<void>;
+  onSaveNextStep: (id: string, newText: string) => Promise<void>;
+  onToggleNextStepCompleted: (id: string, completed: boolean) => Promise<void>;
+  onAddNextStep: (actionItemId: string, text: string) => Promise<void>;
+  onDeleteNextStep: (id: string) => Promise<void>;
+  onAddActionItem: (categoryId: string, text: string) => Promise<void>;
+  onDeleteActionItem: (id: string) => Promise<void>;
+  onAddCategory: (name: string) => Promise<void>;
+  onDeleteCategory: (id: string) => Promise<void>;
 }
 
 type SortOption = 'dueDate' | 'name' | 'recent';
 
-const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem }) => {
+const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onSaveNextStep, onToggleNextStepCompleted, onAddNextStep, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory }) => {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -66,66 +74,139 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
-    // Call the API endpoint
-    const response = await fetch('/api/categories', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name: newName }),
-    });
-
-    if (!response.ok) {
-      // Handle error (toast notification is handled within EditableActionItem)
-      console.error('Failed to update category');
-      throw new Error('Failed to update category'); // Propagate error to EditableActionItem
+    try {
+      await onSaveCategory(id, newName);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to update category:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update category name.",
+        variant: "destructive",
+      });
     }
-    // Optionally refresh data or update state locally
-    router.refresh(); // Simple refresh for now
   };
 
   // Function to handle saving action item edits
   const handleSaveActionItem = async (id: string, newText: string) => {
-    // Call the API endpoint
-    const response = await fetch('/api/action-items', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, actionItem: newText }), // Only updating text here
-    });
-
-    if (!response.ok) {
-      // Handle error
-      console.error('Failed to update action item');
-      throw new Error('Failed to update action item');
+    try {
+      await onSaveActionItem(id, newText);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to update action item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update action item.",
+        variant: "destructive",
+      });
     }
-    // Optionally refresh data or update state locally
-    router.refresh();
   };
 
-  // Updated function to handle saving next steps (text, completion, and due date)
+  // Function to handle saving next step edits
   const handleSaveNextStep = async (id: string, newText: string, newCompleted: boolean, newDueDate: Date | null) => {
-    setIsLoading(true);
     try {
-      const response = await fetch('/api/next-steps', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          id, 
-          step: newText,
-          completed: newCompleted,
-          dueDate: newDueDate
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update next step');
+      await onSaveNextStep(id, newText);
+      if (newCompleted !== undefined) {
+        await onToggleNextStepCompleted(id, newCompleted);
       }
+      router.refresh(); // Refresh to show changes
     } catch (error) {
-      console.error("Failed to save next step:", error);
-      throw error;
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to update next step:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update next step.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to handle adding a new next step
+  const handleAddNextStep = async (actionItemId: string, text: string) => {
+    try {
+      await onAddNextStep(actionItemId, text);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to add next step:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add next step.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to handle deleting a next step
+  const handleDeleteNextStep = async (id: string) => {
+    try {
+      await onDeleteNextStep(id);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to delete next step:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete next step.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to handle adding a new action item
+  const handleAddActionItem = async (categoryId: string, text: string) => {
+    try {
+      await onAddActionItem(categoryId, text);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to add action item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add action item.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to handle deleting an action item
+  const handleDeleteActionItem = async (id: string) => {
+    try {
+      await onDeleteActionItem(id);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to delete action item:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete action item.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to handle adding a new category
+  const handleAddCategory = async (name: string) => {
+    try {
+      await onAddCategory(name);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to add category:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add category.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to handle deleting a category
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      await onDeleteCategory(id);
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to delete category:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete category.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -210,8 +291,8 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const displayCategories = searchQuery.trim() ? searchResults : categories;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Input
             type="text"
@@ -220,7 +301,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
-          <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+          <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
         </div>
         <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
           <SelectTrigger className="w-[180px]">
@@ -238,26 +319,32 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
       </div>
       
       <TooltipProvider>
-        <Accordion type="multiple" className="w-full">
+        <Accordion type="multiple" className="w-full space-y-4">
           {sortedCategories.map((category) => (
-            <AccordionItem key={category.id} value={category.id}>
-              <AccordionTrigger className="hover:no-underline">
-                <div className="flex-1 text-left">
+            <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
+              <AccordionTrigger className="px-4 hover:no-underline [&[data-state=open]>svg]:rotate-180">
+                <div className="flex-1 text-left font-medium">
                   {category.name}
                 </div>
               </AccordionTrigger>
-              <AccordionContent>
+              <AccordionContent className="px-4 pb-4">
                 <div className="mb-4">
                   <EditableTextItem
                     id={category.id}
                     initialText={category.name}
-                    onSave={onSaveCategory}
+                    onSave={handleSaveCategory}
                     itemTypeLabel="Category"
                   />
                 </div>
-                <div className="space-y-4 mt-2">
+                <div className="space-y-4">
                   {category.items.map((item) => (
-                    <div key={item.actionItemId} className={`space-y-2 p-3 rounded-lg transition-colors ${isSelected(item.actionItemId) ? 'bg-secondary/30' : ''}`}>
+                    <div 
+                      key={item.actionItemId} 
+                      className={cn(
+                        "space-y-2 p-3 rounded-lg border transition-colors",
+                        isSelected(item.actionItemId) && "bg-secondary/30 border-secondary"
+                      )}
+                    >
                       <div className="flex items-center gap-2">
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -277,11 +364,11 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                         <EditableTextItem
                           id={item.actionItemId}
                           initialText={item.actionItem}
-                          onSave={onSaveActionItem}
+                          onSave={handleSaveActionItem}
                           itemTypeLabel="Action Item"
                         />
                       </div>
-                      <div className="space-y-1 pl-7">
+                      <div className="space-y-2 pl-7">
                         {item.nextSteps.map((nextStep) => (
                           <EditableNextStep
                             key={nextStep.id}

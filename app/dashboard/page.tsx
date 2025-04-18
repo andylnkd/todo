@@ -8,6 +8,8 @@ import { db } from '../../drizzle/db'; // Corrected path
 import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '../../drizzle/schema'; // Corrected path
 import { eq, desc, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache'; // Import for revalidation
+import { Button } from '@/components/ui/button';
+import { Combine } from 'lucide-react';
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -18,6 +20,7 @@ import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the
 import RefineListWrapper from '../components/RefineListWrapper'; // Add this import
 import SendWhatsAppButton from '../components/SendWhatsAppButton';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
+import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
 
 // Define the expected data structure for the table
 interface NextStepDetail {
@@ -68,6 +71,140 @@ async function saveActionItemText(id: string, newText: string) {
   } catch (error) {
     console.error("Failed to save action item:", error);
     throw new Error("Failed to update action item text.");
+  }
+}
+
+async function saveNextStepText(id: string, newText: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.update(nextStepsTable)
+      .set({ step: newText, updatedAt: new Date() })
+      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId)));
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to save next step:", error);
+    throw new Error("Failed to update next step text.");
+  }
+}
+
+async function toggleNextStepCompleted(id: string, completed: boolean) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.update(nextStepsTable)
+      .set({ completed: completed, updatedAt: new Date() })
+      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId)));
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to toggle next step completed:", error);
+    throw new Error("Failed to toggle next step completed.");
+  }
+}
+
+async function addNextStep(actionItemId: string, text: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.insert(nextStepsTable)
+      .values({
+        actionItemId,
+        step: text,
+        completed: false,
+        userId
+      });
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to add next step:", error);
+    throw new Error("Failed to add next step.");
+  }
+}
+
+async function deleteNextStep(id: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.delete(nextStepsTable)
+      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId)));
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to delete next step:", error);
+    throw new Error("Failed to delete next step.");
+  }
+}
+
+async function addActionItem(categoryId: string, text: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.insert(actionItemsTable)
+      .values({
+        categoryId,
+        actionItem: text,
+        userId
+      });
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to add action item:", error);
+    throw new Error("Failed to add action item.");
+  }
+}
+
+async function deleteActionItem(id: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.delete(actionItemsTable)
+      .where(and(eq(actionItemsTable.id, id), eq(actionItemsTable.userId, userId)));
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to delete action item:", error);
+    throw new Error("Failed to delete action item.");
+  }
+}
+
+async function addCategory(name: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.insert(categoriesTable)
+      .values({
+        name,
+        userId
+      });
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to add category:", error);
+    throw new Error("Failed to add category.");
+  }
+}
+
+async function deleteCategory(id: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  try {
+    await db.delete(categoriesTable)
+      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)));
+    revalidatePath('/dashboard'); // Revalidate to show changes
+  } catch (error) {
+    console.error("Failed to delete category:", error);
+    throw new Error("Failed to delete category.");
   }
 }
 // --- End Server Actions ---
@@ -144,12 +281,11 @@ export default async function Dashboard() {
   categories.sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b bg-white">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="w-10" /> {/* Spacer to help center the title */}
-          <h1 className="text-2xl font-bold">Produktive Dashboard</h1>
-          <div className="w-10">
+    <div className="min-h-screen bg-background">
+      <header className="border-b">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold">Action Items Dashboard</h1>
             <UserButton afterSignOutUrl="/" />
           </div>
         </div>
@@ -157,46 +293,46 @@ export default async function Dashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto space-y-8">
-          <SelectedItemsProvider>
-            {/* === Client Component for Recording === */}
-            <AudioRecorderWrapper />
-            {/* ===================================== */}
-            
-            {/* === Client Component for Sending Email === */}
-            <SendDashboardButton /> 
-            {/* ======================================== */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Add New Items</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AudioRecorderWrapper />
+            </CardContent>
+          </Card>
 
-            {/* === Display Fetched Action Items === */}
-            {categories.length > 0 ? (
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle>Your Action Items</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <RefineListWrapper categories={categories} />
-                    <CopyMarkdownButton categories={categories as any} />
-                    <SendWhatsAppButton categories={categories} />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ActionItemsTable 
-                    categories={categories} 
-                    onSaveCategory={saveCategoryName} 
-                    onSaveActionItem={saveActionItemText} 
-                  />
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                 <CardHeader>
+          <Card>
+            <SelectedItemsProvider>
+              <CardHeader>
+                <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between">
                   <CardTitle>Action Items</CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <p className="text-gray-500 text-center py-4">No action items found. Record a voice note to get started!</p>
-                </CardContent>
-              </Card>
-            )}
-            {/* ===================================== */}
-          </SelectedItemsProvider>
+                  <div className="flex flex-wrap gap-2">
+                    <CombineCategoriesButton categories={categories} />
+                    <RefineListWrapper categories={categories} />
+                    <SendWhatsAppButton categories={categories} />
+                    <CopyMarkdownButton categories={categories} />
+                    <SendDashboardButton />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ActionItemsTable
+                  categories={categories}
+                  onSaveCategory={saveCategoryName}
+                  onSaveActionItem={saveActionItemText}
+                  onSaveNextStep={saveNextStepText}
+                  onToggleNextStepCompleted={toggleNextStepCompleted}
+                  onAddNextStep={addNextStep}
+                  onDeleteNextStep={deleteNextStep}
+                  onAddActionItem={addActionItem}
+                  onDeleteActionItem={deleteActionItem}
+                  onAddCategory={addCategory}
+                  onDeleteCategory={deleteCategory}
+                />
+              </CardContent>
+            </SelectedItemsProvider>
+          </Card>
         </div>
       </main>
     </div>

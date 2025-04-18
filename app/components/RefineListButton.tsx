@@ -69,19 +69,12 @@ export function RefineListButton({ categories, onApplyRefinements }: RefineListB
       });
       return;
     }
+    
+    setIsDialogOpen(false);
     try {
       await onApplyRefinements(proposedStructure);
-      setIsDialogOpen(false);
-      toast({
-        title: "Success",
-        description: "Refinements applied successfully",
-      });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to apply refinements.",
-        variant: "destructive",
-      });
+      console.error('Failed to apply refinements:', error);
     }
   };
 

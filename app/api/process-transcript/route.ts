@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Process with AI
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Updated model name
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // Updated to 2.0
 
     const result = await model.generateContent([PROMPT, transcript]);
     const response = await result.response;

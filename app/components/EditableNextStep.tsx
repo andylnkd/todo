@@ -35,6 +35,7 @@ export default function EditableNextStep({
   const { toast } = useToast();
 
   const handleCheckboxChange = async (checked: boolean) => {
+    const previousState = isChecked;
     setIsChecked(checked);
     setIsLoading(true);
     try {
@@ -48,7 +49,7 @@ export default function EditableNextStep({
         description: `Failed to update next step status. Please try again.`,
         variant: 'destructive',
       });
-      setIsChecked(!checked);
+      setIsChecked(previousState); // Revert to previous state
     } finally {
       setIsLoading(false);
     }
