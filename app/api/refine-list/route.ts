@@ -16,6 +16,7 @@ interface NextStepDetail {
   id: string;
   text: string;
   completed: boolean;
+  dueDate?: Date | null;
 }
 interface ActionItemWithNextSteps {
   actionItemId: string;

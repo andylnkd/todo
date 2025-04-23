@@ -65,7 +65,12 @@ async function transferData() {
     // Insert next steps
     console.log('Inserting next steps...');
     for (const step of nextSteps) {
-      await targetDb.insert(schema.nextSteps).values(step);
+      await targetDb.insert(schema.nextSteps).values({
+        ...step,
+        dueDate: step.dueDate ? new Date(step.dueDate) : null,
+        createdAt: new Date(step.createdAt),
+        updatedAt: new Date(step.updatedAt)
+      });
     }
 
     console.log('\nData transfer completed successfully!');

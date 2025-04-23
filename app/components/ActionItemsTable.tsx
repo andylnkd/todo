@@ -105,10 +105,24 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   // Function to handle saving next step edits
   const handleSaveNextStep = async (id: string, newText: string, newCompleted: boolean, newDueDate: Date | null) => {
     try {
-      await onSaveNextStep(id, newText);
-      if (newCompleted !== undefined) {
-        await onToggleNextStepCompleted(id, newCompleted);
+      // Make a single API call with all updates
+      const response = await fetch('/api/next-steps', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id,
+          step: newText,
+          completed: newCompleted,
+          dueDate: newDueDate ? newDueDate.toISOString() : null,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update next step');
       }
+      
       router.refresh(); // Refresh to show changes
     } catch (error) {
       console.error('Failed to update next step:', error);
@@ -267,10 +281,12 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
           const dateA = getEarliestDueDate(a);
           const dateB = getEarliestDueDate(b);
           
+          // Categories with due dates come first
           if (dateA && !dateB) return -1;
           if (!dateA && dateB) return 1;
           if (!dateA && !dateB) return 0;
           
+          // Sort by earliest date
           return dateA!.getTime() - dateB!.getTime();
         });
       
@@ -375,7 +391,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                             id={nextStep.id}
                             initialText={nextStep.text}
                             initialCompleted={nextStep.completed}
-                            initialDueDate={nextStep.dueDate}
+                            initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
                             onSave={handleSaveNextStep}
                           />
                         ))}
