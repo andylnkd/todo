@@ -9,7 +9,7 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown } from 'lucide-react';
+import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -22,6 +22,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useSelectedItems } from '../context/SelectedItemsContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/app/utils';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 // Define the detailed structure for a next step
 interface NextStepDetail {
@@ -71,6 +74,12 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const [isSearching, setIsSearching] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('dueDate');
   const { toggleItem, isSelected } = useSelectedItems();
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeMode, setMergeMode] = useState<'smart' | 'simple' | 'custom'>('simple');
+  const [customCategoryName, setCustomCategoryName] = useState('');
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [showItemSelection, setShowItemSelection] = useState(false);
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -306,6 +315,77 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
 
   const displayCategories = searchQuery.trim() ? searchResults : categories;
 
+  const handleCategorySelect = (categoryId: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(categoryId) 
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  const handleItemSelect = (itemId: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemId) 
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
+
+  const handleMergeCategories = async () => {
+    if (selectedCategories.length < 2) return;
+    
+    setIsMerging(true);
+    try {
+      const response = await fetch('/api/categories/combine', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          categoryIds: selectedCategories,
+          mode: mergeMode,
+          customName: mergeMode === 'custom' ? customCategoryName : undefined,
+          selectedItemIds: mergeMode === 'custom' ? selectedItems : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to merge categories');
+      }
+
+      const result = await response.json();
+      
+      toast({
+        title: 'Categories merged successfully',
+        description: `Created "${result.category.name}" with ${result.itemsMerged} items.`,
+      });
+
+      setSelectedCategories([]);
+      setMergeMode('simple');
+      setCustomCategoryName('');
+      setSelectedItems([]);
+      router.refresh();
+    } catch (error) {
+      console.error('Error merging categories:', error);
+      toast({
+        title: 'Error merging categories',
+        description: 'There was a problem merging your categories. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  // Get all items from selected categories for the custom mode
+  const itemsFromSelectedCategories = useMemo(() => {
+    if (selectedCategories.length < 2) return [];
+    
+    return categories
+      .filter(cat => selectedCategories.includes(cat.id))
+      .flatMap(cat => cat.items);
+  }, [categories, selectedCategories]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -315,9 +395,19 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
             placeholder="Search items..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 pr-8"
           />
-          <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
+              onClick={() => setSearchQuery('')}
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          )}
         </div>
         <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
           <SelectTrigger className="w-[180px]">
@@ -334,15 +424,160 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         </Select>
       </div>
       
+      {selectedCategories.length >= 2 && (
+        <div className="flex justify-end">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button 
+                variant="default" 
+                size="sm"
+                disabled={isMerging}
+                className="gap-2"
+              >
+                <Merge className="h-4 w-4" />
+                Merge Selected ({selectedCategories.length})
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Merge Categories</DialogTitle>
+                <DialogDescription>
+                  Choose how you want to merge {selectedCategories.length} categories.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="py-4">
+                <RadioGroup 
+                  value={mergeMode} 
+                  onValueChange={(value) => setMergeMode(value as 'smart' | 'simple' | 'custom')}
+                  className="space-y-3"
+                >
+                  <div className="flex items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <RadioGroupItem value="smart" id="smart" className="mt-1" />
+                    <div className="space-y-1 leading-none">
+                      <Label htmlFor="smart" className="flex items-center gap-2">
+                        Smart Merge <Sparkles className="h-4 w-4 text-amber-500" />
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Use AI to suggest a name and organize items intelligently.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <RadioGroupItem value="simple" id="simple" className="mt-1" />
+                    <div className="space-y-1 leading-none">
+                      <Label htmlFor="simple">Simple Merge</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Combine all items into a new category with a default name.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <RadioGroupItem value="custom" id="custom" className="mt-1" />
+                    <div className="space-y-1 leading-none">
+                      <Label htmlFor="custom">Custom Merge</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Choose which items to include and name the new category.
+                      </p>
+                    </div>
+                  </div>
+                </RadioGroup>
+                
+                {mergeMode === 'custom' && (
+                  <div className="mt-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="categoryName">New Category Name</Label>
+                      <Input
+                        id="categoryName"
+                        value={customCategoryName}
+                        onChange={(e) => setCustomCategoryName(e.target.value)}
+                        placeholder="Enter a name for the merged category"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Select Items to Include</Label>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setShowItemSelection(!showItemSelection)}
+                        >
+                          {showItemSelection ? 'Hide' : 'Show'} Items
+                        </Button>
+                      </div>
+                      
+                      {showItemSelection && (
+                        <div className="max-h-60 overflow-y-auto border rounded-md p-2 space-y-2">
+                          {itemsFromSelectedCategories.map(item => (
+                            <div key={item.actionItemId} className="flex items-start space-x-2">
+                              <Checkbox
+                                id={`item-${item.actionItemId}`}
+                                checked={selectedItems.includes(item.actionItemId)}
+                                onCheckedChange={() => handleItemSelect(item.actionItemId)}
+                              />
+                              <Label 
+                                htmlFor={`item-${item.actionItemId}`} 
+                                className="text-sm font-normal"
+                              >
+                                {item.actionItem}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSelectedCategories([])}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleMergeCategories}
+                  disabled={isMerging || (mergeMode === 'custom' && !customCategoryName)}
+                >
+                  {isMerging ? 'Merging...' : 'Merge Categories'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
       <TooltipProvider>
         <Accordion type="multiple" className="w-full space-y-4">
           {sortedCategories.map((category) => (
             <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
-              <AccordionTrigger className="px-4 hover:no-underline [&[data-state=open]>svg]:rotate-180">
-                <div className="flex-1 text-left font-medium">
-                  {category.name}
-                </div>
-              </AccordionTrigger>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={selectedCategories.includes(category.id)}
+                  onCheckedChange={() => handleCategorySelect(category.id)}
+                  className="mt-4"
+                />
+                <AccordionTrigger className="flex-1 hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <span>{category.name}</span>
+                    {getEarliestDueDate(category) && (
+                      <span className="text-sm text-muted-foreground">
+                        Due: {format(getEarliestDueDate(category)!, 'MMM d')}
+                      </span>
+                    )}
+                  </div>
+                </AccordionTrigger>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive"
+                  onClick={() => handleDeleteCategory(category.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
               <AccordionContent className="px-4 pb-4">
                 <div className="mb-4">
                   <EditableTextItem
@@ -383,6 +618,14 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                           onSave={handleSaveActionItem}
                           itemTypeLabel="Action Item"
                         />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-destructive"
+                          onClick={() => handleDeleteActionItem(item.actionItemId)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                       <div className="space-y-2 pl-7">
                         {item.nextSteps.map((nextStep) => (
@@ -393,6 +636,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                             initialCompleted={nextStep.completed}
                             initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
                             onSave={handleSaveNextStep}
+                            onDelete={handleDeleteNextStep}
                           />
                         ))}
                       </div>

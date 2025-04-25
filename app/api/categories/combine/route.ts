@@ -1,239 +1,175 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { db } from '../../../../drizzle/db';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { revalidatePath } from 'next/cache';
-import { categories, actionItems, nextSteps } from '../../../../drizzle/schema';
+import { db } from '@/drizzle/db';
+import { categories, actionItems, nextSteps } from '@/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-interface Category {
-  id: string;
-  name: string;
-  actionItems: {
-    id: string;
-    text: string;
-    nextSteps: {
-      id: string;
-      text: string;
-    }[];
-  }[];
-}
-
-interface MergedData {
-  categoryName: string;
-  actionItems: {
-    text: string;
-    nextSteps: string[];
-  }[];
-}
-
-interface ActionItem {
-  id: string;
-  text: string;
-  nextSteps: {
-    id: string;
-    text: string;
-  }[];
-}
-
-interface ProcessedCategory {
-  id: string;
-  name: string;
-  actionItems: ActionItem[];
-}
-
+// Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+// Define merge modes
+type MergeMode = 'smart' | 'simple' | 'custom';
+
+interface MergeRequest {
+  categoryIds: string[];
+  mode: MergeMode;
+  customName?: string;
+  selectedItemIds?: string[]; // For custom mode
+}
+
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
   try {
-    const { categoryIds } = await req.json();
+    const { userId } = await auth();
+    if (!userId) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
 
-    // 1. Fetch categories with their action items using regular joins
-    const rows = await db
+    const { categoryIds, mode = 'simple', customName, selectedItemIds } = await req.json() as MergeRequest;
+    
+    if (!Array.isArray(categoryIds) || categoryIds.length < 2) {
+      return new NextResponse('At least two categories are required', { status: 400 });
+    }
+
+    // Fetch categories
+    const categoriesToMerge = await db
       .select()
       .from(categories)
       .where(and(
         eq(categories.userId, userId),
         inArray(categories.id, categoryIds)
-      ))
-      .leftJoin(
-        actionItems,
-        eq(categories.id, actionItems.categoryId)
-      )
-      .leftJoin(
-        nextSteps,
-        eq(actionItems.id, nextSteps.actionItemId)
-      );
+      ));
 
-    // Process the rows into the required format
-    const categoriesMap = new Map();
-    
-    rows.forEach((row) => {
-      if (!row.categories) return;
-      
-      const categoryId = row.categories.id;
-      if (!categoriesMap.has(categoryId)) {
-        categoriesMap.set(categoryId, {
-          id: categoryId,
-          name: row.categories.name,
-          actionItems: new Map()
-        });
-      }
-      
-      const category = categoriesMap.get(categoryId);
-      
-      if (row.action_items) {
-        const actionItemId = row.action_items.id;
-        if (!category.actionItems.has(actionItemId)) {
-          category.actionItems.set(actionItemId, {
-            id: actionItemId,
-            text: row.action_items.actionItem,
-            nextSteps: []
-          });
-        }
-        
-        if (row.next_steps) {
-          const nextStep = {
-            id: row.next_steps.id,
-            text: row.next_steps.step
-          };
-          category.actionItems.get(actionItemId).nextSteps.push(nextStep);
-        }
-      }
-    });
-
-    // Convert Maps to arrays for the final structure
-    const categoriesToCombine = Array.from(categoriesMap.values()).map(category => ({
-      ...category,
-      actionItems: Array.from(category.actionItems.values())
-    })) as ProcessedCategory[];
-
-    // 2. Prepare data for Gemini
-    const prompt = `
-      I have ${categoriesToCombine.length} categories to combine. Please help me merge them intelligently.
-      
-      Categories and their items:
-      ${categoriesToCombine.map((cat: ProcessedCategory) => `
-        Category: ${cat.name}
-        Action Items:
-        ${cat.actionItems.map((item: ActionItem) => `
-          - ${item.text}
-            Next Steps:
-            ${item.nextSteps.map((step: { text: string }) => `  * ${step.text}`).join('\n')}
-        `).join('\n')}
-      `).join('\n')}
-
-      Please provide:
-      1. A new category name that best represents the combined categories
-      2. A list of merged action items, combining similar items and their next steps
-      3. For each merged item, include all relevant next steps
-      
-      Format the response as JSON:
-      {
-        "categoryName": "string",
-        "actionItems": [
-          {
-            "text": "string",
-            "nextSteps": ["string"]
-          }
-        ]
-      }
-    `;
-
-    // 3. Get AI response
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text();
-    
-    // Clean and parse the response
-    let mergedData;
-    try {
-      // Remove potential markdown fences
-      text = text.replace(/^```json\s*|^\s*```$|\s*```$/gm, '').trim();
-      if (!text) {
-        throw new Error("Cleaned JSON string is empty after removing markdown fences.");
-      }
-      mergedData = JSON.parse(text);
-    } catch (parseError) {
-      console.error('Initial JSON parsing error:', parseError);
-      // Attempt to find JSON within the text if parsing failed directly
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch && jsonMatch[0]) {
-        try {
-          mergedData = JSON.parse(jsonMatch[0]);
-          console.log("Successfully parsed JSON found within response.");
-        } catch (nestedError) {
-          console.error('Failed to parse extracted JSON:', nestedError);
-          throw new Error('Failed to parse AI response into valid JSON');
-        }
-      } else {
-        console.error('Original AI response text:', text);
-        throw new Error('No valid JSON found in AI response');
-      }
+    if (categoriesToMerge.length !== categoryIds.length) {
+      return new NextResponse('One or more categories not found', { status: 404 });
     }
 
-    // 4. Create new combined category
-    const [combinedCategory] = await db.insert(categories).values({
-      name: mergedData.categoryName,
-      userId: userId,
-      status: 'active'
+    // Fetch action items for these categories
+    const actionItemsToMove = await db
+      .select()
+      .from(actionItems)
+      .where(and(
+        eq(actionItems.userId, userId),
+        inArray(actionItems.categoryId, categoryIds)
+      ));
+
+    // Filter items if in custom mode
+    const filteredItems = mode === 'custom' && selectedItemIds 
+      ? actionItemsToMove.filter(item => selectedItemIds.includes(item.id))
+      : actionItemsToMove;
+
+    // Determine the new category name
+    let newCategoryName = 'Merged Category';
+    
+    if (mode === 'smart') {
+      // Use AI to suggest a name
+      try {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const prompt = `
+          I have ${categoriesToMerge.length} categories to merge. Please suggest a concise, descriptive name for the combined category.
+          
+          Categories:
+          ${categoriesToMerge.map(cat => `- ${cat.name}`).join('\n')}
+          
+          Return ONLY the suggested name, nothing else.
+        `;
+        
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const suggestedName = response.text().trim();
+        
+        if (suggestedName) {
+          newCategoryName = suggestedName;
+        }
+      } catch (error) {
+        console.error('Error getting AI suggestion:', error);
+        // Fall back to default name
+      }
+    } else if (mode === 'custom' && customName) {
+      newCategoryName = customName;
+    }
+
+    // Create a new combined category
+    const [newCategory] = await db.insert(categories).values({
+      name: newCategoryName,
+      userId,
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date()
     }).returning();
 
-    // 5. Create merged action items
-    for (const item of mergedData.actionItems) {
-      const [newActionItem] = await db.insert(actionItems).values({
-        categoryId: combinedCategory.id,
-        actionItem: item.text,
-        userId: userId,
-        status: 'pending'
-      }).returning();
-
-      // Create next steps for this action item
-      for (const stepText of item.nextSteps) {
-        await db.insert(nextSteps).values({
-          actionItemId: newActionItem.id,
-          step: stepText,
-          completed: false,
-          userId: userId
-        });
-      }
-    }
-
-    // 6. Delete original categories and their associated items
-    for (const categoryId of categoryIds) {
-      // First get all action items for this category
-      const categoryActionItems = await db
+    // Move all action items to the new category
+    if (filteredItems.length > 0) {
+      // First, fetch all next steps for these action items
+      const nextStepsToMove = await db
         .select()
-        .from(actionItems)
-        .where(eq(actionItems.categoryId, categoryId));
+        .from(nextSteps)
+        .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
 
-      // Delete next steps for each action item
-      for (const item of categoryActionItems) {
-        await db
-          .delete(nextSteps)
-          .where(eq(nextSteps.actionItemId, item.id));
+      // Create a map of old action item IDs to their next steps
+      const nextStepsMap = new Map<string, typeof nextStepsToMove>();
+      filteredItems.forEach(item => {
+        nextStepsMap.set(item.id, nextStepsToMove.filter(step => step.actionItemId === item.id));
+      });
+
+      // Insert new action items and get their IDs
+      const newActionItems = await db.insert(actionItems).values(
+        filteredItems.map(item => ({
+          actionItem: item.actionItem,
+          categoryId: newCategory.id,
+          userId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }))
+      ).returning();
+
+      // Insert next steps for the new action items
+      if (nextStepsToMove.length > 0) {
+        await db.insert(nextSteps).values(
+          newActionItems.flatMap((newItem: typeof newActionItems[0]) => {
+            const oldItem = filteredItems.find(item => item.actionItem === newItem.actionItem);
+            if (!oldItem) return [];
+            
+            const oldNextSteps = nextStepsMap.get(oldItem.id) || [];
+            return oldNextSteps.map(step => ({
+              step: step.step,
+              completed: step.completed,
+              actionItemId: newItem.id,
+              userId,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }));
+          })
+        );
       }
 
-      // Delete all action items for this category
-      await db
-        .delete(actionItems)
-        .where(eq(actionItems.categoryId, categoryId));
+      // Delete old next steps
+      await db.delete(nextSteps)
+        .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
 
-      // Finally delete the category
-      await db
-        .delete(categories)
-        .where(eq(categories.id, categoryId));
+      // Delete old action items
+      await db.delete(actionItems)
+        .where(and(
+          eq(actionItems.userId, userId),
+          inArray(actionItems.categoryId, categoryIds)
+        ));
     }
 
-    revalidatePath('/dashboard');
-    return Response.json({ success: true, category: combinedCategory });
+    // Finally, delete the original categories
+    await db.delete(categories)
+      .where(and(
+        eq(categories.userId, userId),
+        inArray(categories.id, categoryIds)
+      ));
+
+    return NextResponse.json({ 
+      success: true, 
+      category: newCategory,
+      mode,
+      itemsMerged: filteredItems.length
+    });
   } catch (error) {
     console.error('Error combining categories:', error);
-    return Response.json({ error: 'Failed to combine categories' }, { status: 500 });
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 

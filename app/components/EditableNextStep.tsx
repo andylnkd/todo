@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Edit2, Check, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Edit2, Check, X, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/app/utils';
 import { format } from 'date-fns';
@@ -18,6 +18,7 @@ interface EditableNextStepProps {
   initialCompleted: boolean;
   initialDueDate?: Date | null;
   onSave: (id: string, newText: string, newCompleted: boolean, newDueDate: Date | null) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
 }
 
 export default function EditableNextStep({
@@ -26,6 +27,7 @@ export default function EditableNextStep({
   initialCompleted,
   initialDueDate = null,
   onSave,
+  onDelete
 }: EditableNextStepProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(initialText);
@@ -204,6 +206,17 @@ export default function EditableNextStep({
         >
           <Edit2 className="h-4 w-4" />
         </Button>
+        {onDelete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-destructive"
+            onClick={() => onDelete(id)}
+            type="button"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        )}
       </div>
     </div>
   );
