@@ -31,142 +31,145 @@ export async function POST(req: Request) {
       return new NextResponse('At least two categories are required', { status: 400 });
     }
 
-    // Fetch categories
-    const categoriesToMerge = await db
-      .select()
-      .from(categories)
-      .where(and(
-        eq(categories.userId, userId),
-        inArray(categories.id, categoryIds)
-      ));
-
-    if (categoriesToMerge.length !== categoryIds.length) {
-      return new NextResponse('One or more categories not found', { status: 404 });
-    }
-
-    // Fetch action items for these categories
-    const actionItemsToMove = await db
-      .select()
-      .from(actionItems)
-      .where(and(
-        eq(actionItems.userId, userId),
-        inArray(actionItems.categoryId, categoryIds)
-      ));
-
-    // Filter items if in custom mode
-    const filteredItems = mode === 'custom' && selectedItemIds 
-      ? actionItemsToMove.filter(item => selectedItemIds.includes(item.id))
-      : actionItemsToMove;
-
-    // Determine the new category name
-    let newCategoryName = 'Merged Category';
-    
-    if (mode === 'smart') {
-      // Use AI to suggest a name
-      try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-        const prompt = `
-          I have ${categoriesToMerge.length} categories to merge. Please suggest a concise, descriptive name for the combined category.
-          
-          Categories:
-          ${categoriesToMerge.map(cat => `- ${cat.name}`).join('\n')}
-          
-          Return ONLY the suggested name, nothing else.
-        `;
-        
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const suggestedName = response.text().trim();
-        
-        if (suggestedName) {
-          newCategoryName = suggestedName;
-        }
-      } catch (error) {
-        console.error('Error getting AI suggestion:', error);
-        // Fall back to default name
-      }
-    } else if (mode === 'custom' && customName) {
-      newCategoryName = customName;
-    }
-
-    // Create a new combined category
-    const [newCategory] = await db.insert(categories).values({
-      name: newCategoryName,
-      userId,
-      status: 'active',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-
-    // Move all action items to the new category
-    if (filteredItems.length > 0) {
-      // First, fetch all next steps for these action items
-      const nextStepsToMove = await db
+    // Use a transaction to ensure all operations are atomic
+    return await db.transaction(async (tx) => {
+      // Fetch categories
+      const categoriesToMerge = await tx
         .select()
-        .from(nextSteps)
-        .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
+        .from(categories)
+        .where(and(
+          eq(categories.userId, userId),
+          inArray(categories.id, categoryIds)
+        ));
 
-      // Create a map of old action item IDs to their next steps
-      const nextStepsMap = new Map<string, typeof nextStepsToMove>();
-      filteredItems.forEach(item => {
-        nextStepsMap.set(item.id, nextStepsToMove.filter(step => step.actionItemId === item.id));
-      });
-
-      // Insert new action items and get their IDs
-      const newActionItems = await db.insert(actionItems).values(
-        filteredItems.map(item => ({
-          actionItem: item.actionItem,
-          categoryId: newCategory.id,
-          userId,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }))
-      ).returning();
-
-      // Insert next steps for the new action items
-      if (nextStepsToMove.length > 0) {
-        await db.insert(nextSteps).values(
-          newActionItems.flatMap((newItem: typeof newActionItems[0]) => {
-            const oldItem = filteredItems.find(item => item.actionItem === newItem.actionItem);
-            if (!oldItem) return [];
-            
-            const oldNextSteps = nextStepsMap.get(oldItem.id) || [];
-            return oldNextSteps.map(step => ({
-              step: step.step,
-              completed: step.completed,
-              actionItemId: newItem.id,
-              userId,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }));
-          })
-        );
+      if (categoriesToMerge.length !== categoryIds.length) {
+        return new NextResponse('One or more categories not found', { status: 404 });
       }
 
-      // Delete old next steps
-      await db.delete(nextSteps)
-        .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
-
-      // Delete old action items
-      await db.delete(actionItems)
+      // Fetch action items for these categories
+      const actionItemsToMove = await tx
+        .select()
+        .from(actionItems)
         .where(and(
           eq(actionItems.userId, userId),
           inArray(actionItems.categoryId, categoryIds)
         ));
-    }
 
-    // Finally, delete the original categories
-    await db.delete(categories)
-      .where(and(
-        eq(categories.userId, userId),
-        inArray(categories.id, categoryIds)
-      ));
+      // Filter items if in custom mode
+      const filteredItems = mode === 'custom' && selectedItemIds 
+        ? actionItemsToMove.filter(item => selectedItemIds.includes(item.id))
+        : actionItemsToMove;
 
-    return NextResponse.json({ 
-      success: true, 
-      category: newCategory,
-      mode,
-      itemsMerged: filteredItems.length
+      // Determine the new category name
+      let newCategoryName = 'Merged Category';
+      
+      if (mode === 'smart') {
+        // Use AI to suggest a name
+        try {
+          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          const prompt = `
+            I have ${categoriesToMerge.length} categories to merge. Please suggest a concise, descriptive name for the combined category.
+            
+            Categories:
+            ${categoriesToMerge.map(cat => `- ${cat.name}`).join('\n')}
+            
+            Return ONLY the suggested name, nothing else.
+          `;
+          
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const suggestedName = response.text().trim();
+          
+          if (suggestedName) {
+            newCategoryName = suggestedName;
+          }
+        } catch (error) {
+          console.error('Error getting AI suggestion:', error);
+          // Fall back to default name
+        }
+      } else if (mode === 'custom' && customName) {
+        newCategoryName = customName;
+      }
+
+      // Create a new combined category
+      const [newCategory] = await tx.insert(categories).values({
+        name: newCategoryName,
+        userId,
+        status: 'active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }).returning();
+
+      // Move all action items to the new category
+      if (filteredItems.length > 0) {
+        // First, fetch all next steps for these action items
+        const nextStepsToMove = await tx
+          .select()
+          .from(nextSteps)
+          .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
+
+        // Create a map of old action item IDs to their next steps
+        const nextStepsMap = new Map<string, typeof nextStepsToMove>();
+        filteredItems.forEach(item => {
+          nextStepsMap.set(item.id, nextStepsToMove.filter(step => step.actionItemId === item.id));
+        });
+
+        // Insert new action items and get their IDs
+        const newActionItems = await tx.insert(actionItems).values(
+          filteredItems.map(item => ({
+            actionItem: item.actionItem,
+            categoryId: newCategory.id,
+            userId,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }))
+        ).returning();
+
+        // Insert next steps for the new action items
+        if (nextStepsToMove.length > 0) {
+          await tx.insert(nextSteps).values(
+            newActionItems.flatMap((newItem: typeof newActionItems[0]) => {
+              const oldItem = filteredItems.find(item => item.actionItem === newItem.actionItem);
+              if (!oldItem) return [];
+              
+              const oldNextSteps = nextStepsMap.get(oldItem.id) || [];
+              return oldNextSteps.map(step => ({
+                step: step.step,
+                completed: step.completed,
+                actionItemId: newItem.id,
+                userId,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }));
+            })
+          );
+        }
+
+        // Delete old next steps
+        await tx.delete(nextSteps)
+          .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
+
+        // Delete old action items
+        await tx.delete(actionItems)
+          .where(and(
+            eq(actionItems.userId, userId),
+            inArray(actionItems.categoryId, categoryIds)
+          ));
+      }
+
+      // Finally, delete the original categories
+      await tx.delete(categories)
+        .where(and(
+          eq(categories.userId, userId),
+          inArray(categories.id, categoryIds)
+        ));
+
+      return NextResponse.json({ 
+        success: true, 
+        category: newCategory,
+        mode,
+        itemsMerged: filteredItems.length
+      });
     });
   } catch (error) {
     console.error('Error combining categories:', error);
