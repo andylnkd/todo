@@ -6,53 +6,59 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Add CORS headers helper function
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*', // In production, replace with your Android app's domain
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders() });
+}
 
 export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // For development, you might want to bypass auth temporarily
+  // const { userId } = await auth();
+  // if (!userId) {
+  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // }
 
   try {
     const formData = await request.formData();
-    // --- Check the key name 'audio' matches your frontend form ---
     const audioFile = formData.get('audio');
 
-    if (!audioFile || !(audioFile instanceof Blob)) { // More robust check
+    if (!audioFile || !(audioFile instanceof Blob)) {
       return NextResponse.json(
         { error: 'No valid audio file provided under the key "audio"' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders() }
       );
     }
 
     console.log('Received audio file:', {
-        name: audioFile instanceof File ? audioFile.name : 'N/A', // Log name if it's a File
+        name: audioFile instanceof File ? audioFile.name : 'N/A',
         size: audioFile.size,
         type: audioFile.type
     });
 
     const file = new File([audioFile], 'audio.webm', { type: audioFile.type });
 
-    // --- Attempt to pass the Blob/File directly ---
     const response = await openai.audio.transcriptions.create({
-      // The library might handle Blob/File directly. Cast to File if necessary.
-      // It needs a name, which Blob doesn't inherently have, so File is better.
-      // If it's just a Blob, you might need Solution 2.
       file: file,
       model: 'whisper-1',
-      response_format: "json" // Explicitly request JSON
+      response_format: "json"
     });
 
-    // Assuming response_format: "json", the text is directly available
     const transcript = response.text;
     console.log('Transcript:', transcript);
 
-    return NextResponse.json({ text: transcript });
+    return NextResponse.json({ text: transcript }, { headers: corsHeaders() });
 
-  } catch (error: any) { // Catch specific error types if needed
+  } catch (error: any) {
     console.error('Transcription API Error:', error);
-    // Log more detailed error info if available
     if (error.response) {
       console.error('Error Response Data:', error.response.data);
       console.error('Error Response Status:', error.response.status);
@@ -64,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(
       { error: 'Failed to transcribe audio', details: error.message || 'Unknown error' },
-      { status: 500 }
+      { status: 500, headers: corsHeaders() }
     );
   }
 }
