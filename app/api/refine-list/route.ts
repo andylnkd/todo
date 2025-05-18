@@ -8,6 +8,7 @@ import {
 } from '../../../drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { jsonrepair } from 'jsonrepair';
 
 // --- Type Definitions ---
 
@@ -235,55 +236,96 @@ export async function POST(request: NextRequest) {
       JSON.stringify(dataForPrompt, null, 2) // Pretty print simplified data for prompt
     );
 
-    // Call Gemini API
+    // Call Gemini API (first attempt)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-
-    // Parse the response from Gemini
-    let parsedSuggestions: GeminiSuggestions;
+    let result, response, text, parsedSuggestions;
+    let parseError, jsonMatch;
+    let step = 'first';
     try {
-      // Remove potential markdown fences (```json ... ```)
+      result = await model.generateContent(prompt);
+      response = await result.response;
+      text = response.text();
+      console.log(`[Refine] Gemini first response:`, text.slice(0, 500));
+      // Try to parse
       const cleanJson = text.replace(/^```json\s*|^\s*```$|\s*```$/gm, '').trim();
-      if (!cleanJson) {
-          throw new Error("Cleaned JSON string is empty after removing markdown fences.");
-      }
       parsedSuggestions = JSON.parse(cleanJson);
-    } catch (parseError) {
-      console.error('Gemini response parsing error:', parseError);
-      console.error('Raw Gemini response:', text);
-      // Attempt to find JSON within the text if parsing failed directly
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      step = 'first-parse';
+    } catch (err) {
+      parseError = err;
+      console.error('[Refine] First Gemini parse failed:', parseError);
+      // Try to extract JSON from within the text
+      jsonMatch = text && text.match(/\{[\s\S]*\}/);
       if (jsonMatch && jsonMatch[0]) {
-          try {
-              parsedSuggestions = JSON.parse(jsonMatch[0]);
-              console.warn("Successfully parsed JSON found within Gemini's raw response.");
-          } catch (nestedError) {
-               console.error('Nested parsing error after trying to extract JSON:', nestedError);
-               return NextResponse.json(
-                   { error: 'Failed to parse AI suggestions, even after attempting extraction.' },
-                   { status: 500 }
-               );
-          }
-      } else {
-          return NextResponse.json(
-              { error: 'Failed to parse AI suggestions. No valid JSON found.' },
-              { status: 500 }
-          );
+        try {
+          parsedSuggestions = JSON.parse(jsonMatch[0]);
+          step = 'first-jsonMatch';
+          console.warn('[Refine] Successfully parsed JSON found within Gemini\'s raw response.');
+        } catch (nestedError) {
+          parseError = nestedError;
+          console.error('[Refine] Nested parsing error after trying to extract JSON:', nestedError);
+        }
       }
+    }
+
+    // If still not parsed, retry with feedback to Gemini
+    if (!parsedSuggestions) {
+      console.log('[Refine] Retrying with feedback to Gemini...');
+      const feedbackPrompt = `The following output was supposed to be valid JSON but failed to parse with error: ${parseError instanceof Error ? parseError.message : String(parseError)}. Please correct it and return only valid JSON.\n\nOutput:\n${text}`;
+      try {
+        const retryResult = await model.generateContent(feedbackPrompt);
+        const retryResponse = await retryResult.response;
+        const retryText = retryResponse.text();
+        console.log('[Refine] Gemini retry response:', retryText.slice(0, 500));
+        const retryCleanJson = retryText.replace(/^```json\s*|^\s*```$|\s*```$/gm, '').trim();
+        parsedSuggestions = JSON.parse(retryCleanJson);
+        step = 'retry-parse';
+      } catch (retryErr) {
+        parseError = retryErr;
+        jsonMatch = text && text.match(/\{[\s\S]*\}/);
+        if (jsonMatch && jsonMatch[0]) {
+          try {
+            parsedSuggestions = JSON.parse(jsonMatch[0]);
+            step = 'retry-jsonMatch';
+            console.warn('[Refine] Successfully parsed JSON found within Gemini retry raw response.');
+          } catch (nestedError) {
+            parseError = nestedError;
+            console.error('[Refine] Nested parsing error after retry:', nestedError);
+          }
+        }
+      }
+    }
+
+    // If still not parsed, try jsonrepair
+    if (!parsedSuggestions && text) {
+      try {
+        console.log('[Refine] Attempting jsonrepair...');
+        parsedSuggestions = JSON.parse(jsonrepair(text));
+        step = 'jsonrepair';
+      } catch (repairErr) {
+        console.error('[Refine] jsonrepair failed:', repairErr);
+      }
+    }
+
+    // If still not parsed, return error
+    if (!parsedSuggestions) {
+      console.error('[Refine] Failed to parse AI suggestions after all attempts.');
+      return NextResponse.json(
+        { error: 'Failed to parse AI suggestions after retry and repair.' },
+        { status: 500 }
+      );
     }
 
     // Validate the structure
     if (!parsedSuggestions || !Array.isArray(parsedSuggestions.proposedStructure) || typeof parsedSuggestions.changeSummary !== 'string') {
-         console.error('Invalid structure in AI suggestions (expected proposedStructure array and changeSummary string):', parsedSuggestions);
+         console.error('[Refine] Invalid structure in AI suggestions (expected proposedStructure array and changeSummary string):', parsedSuggestions);
          return NextResponse.json(
             { error: 'Received invalid structure from AI.' },
             { status: 500 }
          );
     }
 
-    // Return the suggestions including the summary
+    // Return the suggestions including the summary (do not apply changes)
+    console.log(`[Refine] Successfully parsed suggestions at step: ${step}`);
     return NextResponse.json({
       proposedStructure: parsedSuggestions.proposedStructure,
       changeSummary: parsedSuggestions.changeSummary
