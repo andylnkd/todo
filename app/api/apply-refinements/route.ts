@@ -8,6 +8,7 @@ import { eq, and } from 'drizzle-orm';
 interface GeminiActionItem {
     actionItem: string;
     nextSteps: string[]; // Simple array of strings
+    type?: string; // Added for daily items
 }
 interface GeminiCategory {
     name: string;
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
                         categoryId: newCategory.id,
                         userId: userId, // Ensure userId is set for action items too
                         transcriptionId: null, // Set missing field to null
+                        type: item.type ? item.type : undefined, // Pass undefined if not present
                     }).returning({ id: actionItemsTable.id });
 
                     for (const stepText of item.nextSteps) {

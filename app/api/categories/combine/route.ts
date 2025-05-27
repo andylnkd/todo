@@ -120,6 +120,9 @@ export async function POST(req: Request) {
             actionItem: item.actionItem,
             categoryId: newCategory.id,
             userId,
+            transcriptionId: item.transcriptionId,
+            status: item.status,
+            type: item.type,
             createdAt: new Date(),
             updatedAt: new Date()
           }))

@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
     try {
       const formData = await request.formData();
       const audioFile = formData.get('audio');
+      const itemTypeFromForm = formData.get('type') as string | null;
+
       log('📁 Received form data', { 
         hasAudioFile: !!audioFile,
         audioFileType: audioFile instanceof Blob ? audioFile.type : typeof audioFile,
@@ -194,6 +196,7 @@ export async function POST(request: NextRequest) {
                 userId,
                 transcriptionId,
                 status: 'pending',
+                type: itemTypeFromForm === null ? undefined : itemTypeFromForm,
               })
               .returning({ id: schema.actionItems.id });
             const actionItemId = insertedActionItem[0]?.id;

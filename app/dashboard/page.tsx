@@ -10,6 +10,7 @@ import { eq, desc, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache'; // Import for revalidation
 import { Button } from '@/components/ui/button';
 import { Combine } from 'lucide-react';
+import Link from 'next/link';
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -208,6 +209,27 @@ async function deleteCategory(id: string) {
     throw new Error("Failed to delete category.");
   }
 }
+
+async function handleDashboardTranscriptProcessed(transcript: string) {
+  'use server';
+  const { userId } = await auth(); // Ensure auth is checked within server action
+  if (!userId) throw new Error('User not authenticated for dashboard processing');
+
+  // Call the existing process-transcript API route for regular items
+  // It will default to type: 'regular' on the backend if type is not sent
+  const response = await fetch(new URL('/api/process-transcript', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ transcript: transcript }), // No type specified, or type: 'regular'
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || 'Failed to process dashboard transcript');
+  }
+  revalidatePath('/dashboard'); 
+}
+
 // --- End Server Actions ---
 
 // The main Dashboard page component is now async
@@ -225,7 +247,10 @@ export default async function Dashboard() {
     .where(eq(categoriesTable.userId, userId))
     .leftJoin(
       actionItemsTable,
-      eq(categoriesTable.id, actionItemsTable.categoryId)
+      and(
+        eq(categoriesTable.id, actionItemsTable.categoryId),
+        eq(actionItemsTable.type, 'regular') // Filter for regular action items
+      )
     )
     .leftJoin(
       nextStepsTable,
@@ -286,7 +311,12 @@ export default async function Dashboard() {
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">Action Items Dashboard</h1>
+            <div className="flex items-center gap-6">
+              <h1 className="text-2xl font-bold">Action Items Dashboard</h1>
+              <Link href="/daily" className="text-lg font-medium text-foreground hover:text-primary transition-colors">
+                Daily
+              </Link>
+            </div>
             <UserButton afterSignOutUrl="/" />
           </div>
         </div>
@@ -299,7 +329,7 @@ export default async function Dashboard() {
               <CardTitle>Add New Items</CardTitle>
             </CardHeader>
             <CardContent>
-              <AudioRecorderWrapper />
+              <AudioRecorderWrapper onTranscriptProcessed={handleDashboardTranscriptProcessed} />
             </CardContent>
           </Card>
 

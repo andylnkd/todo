@@ -17,6 +17,7 @@ export const actionItems = pgTable('action_items', {
   actionItem: text('action_item').notNull(),
   transcriptionId: uuid('transcription_id').references(() => transcriptions.id),
   status: varchar('status', { length: 50 }).default('pending').notNull(),
+  type: varchar('type', { length: 50 }).default('regular').notNull(), // Added for daily items
   userId: varchar('user_id', { length: 255 }).notNull(), // Clerk user ID
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

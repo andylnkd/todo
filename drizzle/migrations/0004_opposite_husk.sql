@@ -1,0 +1,1 @@
+ALTER TABLE "action_items" ADD COLUMN "type" varchar(50) DEFAULT 'regular' NOT NULL;

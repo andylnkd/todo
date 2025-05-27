@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     transcript = body.transcript; // Assume transcript is passed directly
+    const itemType = body.type; // Extract type from request body
 
     if (!transcript) {
       return NextResponse.json(
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest) {
               userId: userId,
               transcriptionId: transcriptionId!, // Link to the saved transcript
               status: 'pending',
+              type: itemType, // Pass the type here
             })
             .returning({ id: schema.actionItems.id });
           

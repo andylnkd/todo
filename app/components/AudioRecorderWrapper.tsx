@@ -6,7 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"; // Corrected import path assuming standard shadcn setup
 
-export default function AudioRecorderWrapper() {
+interface AudioRecorderWrapperProps {
+  onTranscriptProcessed: (transcript: string) => Promise<void> | void;
+}
+
+export default function AudioRecorderWrapper({ onTranscriptProcessed }: AudioRecorderWrapperProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const { toast } = useToast(); // For giving user feedback
@@ -19,8 +23,6 @@ export default function AudioRecorderWrapper() {
     const formData = new FormData();
     formData.append('audio', blob, 'recording.webm');
 
-    let transcriptText = '';
-
     try {
       // 1. Get Transcription
       const transcribeResponse = await fetch('/api/transcribe', {
@@ -31,19 +33,16 @@ export default function AudioRecorderWrapper() {
       const transcribeData = await transcribeResponse.json();
       if (!transcribeResponse.ok) throw new Error(transcribeData.error || 'Failed to transcribe audio');
       
-      transcriptText = transcribeData.text;
+      const transcriptText = transcribeData.text;
       
-      // 2. Process Transcription (fire-and-forget for now, or show loading)
-      // We no longer need to setActionItems here as the page reloads/fetches
-      await processTranscript(transcriptText);
+      // 2. Call the provided callback with the transcript
+      await onTranscriptProcessed(transcriptText);
       
+      // General toast message, parent can show more specific ones if needed
       toast({
-        title: "Processing Complete",
-        description: "Your voice note is being processed and action items will appear shortly.",
+        title: "Recording Processed",
+        description: "Your voice note is being processed.",
       });
-      // Optionally, trigger a page refresh or use router.refresh() from next/navigation
-      // to force the server component to refetch data after processing
-      // Example: import { useRouter } from 'next/navigation'; const router = useRouter(); router.refresh();
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
@@ -55,38 +54,6 @@ export default function AudioRecorderWrapper() {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // This function just calls the processing API endpoint
-  const processTranscript = async (transcript: string) => {
-    try {
-      const response = await fetch('/api/process-transcript', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ transcript }),
-      });
-
-      if (!response.ok) {
-         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process transcript');
-      }
-      
-      // No need to set state here, the main page will fetch the data
-      console.log('Transcript processing initiated successfully.');
-
-    } catch (error) {
-      console.error('Error initiating transcript processing:', error);
-      // Update error state or show toast if needed, but primary error handling is in handleRecordingComplete
-       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during processing initiation';
-       setError(errorMessage); // Set error state here too
-       toast({
-        title: "Error Processing Transcript",
-        description: errorMessage,
-        variant: "destructive",
-      });
     }
   };
 
