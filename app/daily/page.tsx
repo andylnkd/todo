@@ -7,6 +7,11 @@ import { eq, and, gte, lte } from 'drizzle-orm';
 import AudioRecorderWrapper from '../components/AudioRecorderWrapper';
 import { revalidatePath } from 'next/cache';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Helper to get start and end of today
 function getTodayTimestamps() {
@@ -45,16 +50,39 @@ export default async function DailyPage() {
 
   async function handleDailyTranscriptProcessed(transcript: string) {
     'use server';
-    if (!userId) throw new Error('User not authenticated');
-    const response = await fetch(new URL('/api/process-transcript', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: transcript, type: 'daily' }),
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to process daily transcript');
+    if (!userId) throw new Error('User not authenticated for daily processing');
+    
+    try {
+      await processTranscriptAndSave({
+        transcript,
+        userId,
+        itemType: 'daily',
+      });
+      revalidatePath('/daily');
+    } catch (error) {
+      console.error("Error processing daily transcript in server action:", error);
+      throw error;
     }
+  }
+
+  async function toggleDailyItemStatus(id: string, status: string) {
+    'use server';
+    if (!userId) throw new Error('User not authenticated');
+    await db.update(schema.actionItems)
+      .set({ status: status === 'pending' ? 'completed' : 'pending', updatedAt: new Date() })
+      .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
+    revalidatePath('/daily');
+  }
+
+  async function deleteDailyItem(id: string) {
+    'use server';
+    if (!userId) throw new Error('User not authenticated');
+    // First delete all next steps for this action item
+    await db.delete(schema.nextSteps)
+      .where(and(eq(schema.nextSteps.actionItemId, id), eq(schema.nextSteps.userId, userId)));
+    // Then delete the action item
+    await db.delete(schema.actionItems)
+      .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
     revalidatePath('/daily');
   }
 
@@ -83,14 +111,26 @@ export default async function DailyPage() {
             {dailyItems.length > 0 ? (
               <div className="space-y-4">
                 {dailyItems.map((item) => (
-                  <Card key={item.id} className="shadow-md hover:shadow-lg transition-shadow bg-white">
+                  <Card key={item.id} className="shadow-sm hover:shadow-md transition-shadow bg-white">
                     <CardContent className="p-4">
-                      <p className="text-gray-800 text-base break-words">{item.actionItem}</p>
-                      <div className="mt-2 flex flex-col sm:flex-row sm:justify-between sm:items-center">
-                        <p className="text-xs text-gray-500">
+                      <div className="flex items-start gap-3">
+                        <form action={async () => { 'use server'; await toggleDailyItemStatus(item.id, item.status); }}>
+                          <button type="submit">
+                            <Checkbox checked={item.status === 'completed'} className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground" />
+                          </button>
+                        </form>
+                        <p className={cn("flex-1 text-gray-800 text-base break-words", item.status === 'completed' && 'line-through text-muted-foreground')}>{item.actionItem}</p>
+                        <form action={async () => { 'use server'; await deleteDailyItem(item.id); }}>
+                          <Button type="submit" variant="ghost" size="icon" className="h-6 w-6 text-destructive">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </form>
+                      </div>
+                      <div className="mt-2 pl-0 sm:pl-0 flex flex-col sm:flex-row sm:justify-between sm:items-center text-xs text-gray-500">
+                        <p>
                           Status: <span className={`font-medium ${item.status === 'pending' ? 'text-orange-500' : 'text-green-500'}`}>{item.status}</span>
                         </p>
-                        <p className="text-xs text-gray-500 mt-1 sm:mt-0">
+                        <p className="mt-1 sm:mt-0">
                           Added: {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>

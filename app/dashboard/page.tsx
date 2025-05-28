@@ -22,6 +22,7 @@ import RefineListWrapper from '../components/RefineListWrapper'; // Add this imp
 import SendWhatsAppButton from '../components/SendWhatsAppButton';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
+import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 
 // Define the expected data structure for the table
 interface NextStepDetail {
@@ -212,22 +213,21 @@ async function deleteCategory(id: string) {
 
 async function handleDashboardTranscriptProcessed(transcript: string) {
   'use server';
-  const { userId } = await auth(); // Ensure auth is checked within server action
+  const { userId } = await auth();
   if (!userId) throw new Error('User not authenticated for dashboard processing');
 
-  // Call the existing process-transcript API route for regular items
-  // It will default to type: 'regular' on the backend if type is not sent
-  const response = await fetch(new URL('/api/process-transcript', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transcript: transcript }), // No type specified, or type: 'regular'
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to process dashboard transcript');
+  try {
+    await processTranscriptAndSave({
+      transcript,
+      userId,
+      itemType: 'regular', // Explicitly set to regular, or omit to rely on default
+    });
+    revalidatePath('/dashboard'); 
+  } catch (error) {
+    console.error("Error processing dashboard transcript in server action:", error);
+    // Handle error as appropriate for the dashboard page
+    throw error; 
   }
-  revalidatePath('/dashboard'); 
 }
 
 // --- End Server Actions ---
