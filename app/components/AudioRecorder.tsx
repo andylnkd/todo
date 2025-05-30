@@ -17,7 +17,19 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      let mimeType = 'audio/webm';
+      if (typeof window !== 'undefined') {
+        if (/iPad|iPhone|iPod/.test(navigator.userAgent) && MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) && MediaRecorder.isTypeSupported('audio/aac')) {
+          mimeType = 'audio/aac';
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          mimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = 'audio/ogg';
+        }
+      }
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -28,7 +40,7 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(chunksRef.current, { type: mimeType });
         await onRecordingComplete(audioBlob);
         stream.getTracks().forEach(track => track.stop());
       };

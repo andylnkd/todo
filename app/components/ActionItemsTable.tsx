@@ -9,7 +9,7 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2 } from 'lucide-react';
+import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -25,6 +25,7 @@ import { cn } from '@/app/utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import AudioRecorderWrapper from './AudioRecorderWrapper';
 
 // Define the detailed structure for a next step
 interface NextStepDetail {
@@ -80,6 +81,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [showItemSelection, setShowItemSelection] = useState(false);
+  const [enhanceModalOpen, setEnhanceModalOpen] = useState(false);
+  const [enhanceTarget, setEnhanceTarget] = useState<{ id: string, type: 'actionItem' | 'category' } | null>(null);
+  const [enhanceLoading, setEnhanceLoading] = useState(false);
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -569,6 +573,24 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                     )}
                   </div>
                 </AccordionTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-primary"
+                      onClick={() => {
+                        setEnhanceTarget({ id: category.id, type: 'category' });
+                        setEnhanceModalOpen(true);
+                      }}
+                    >
+                      <Mic className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Enhance Category with Audio</p>
+                  </TooltipContent>
+                </Tooltip>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -612,6 +634,24 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                             <p>Select for sharing</p>
                           </TooltipContent>
                         </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-primary"
+                              onClick={() => {
+                                setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
+                                setEnhanceModalOpen(true);
+                              }}
+                            >
+                              <Mic className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Enhance with Audio</p>
+                          </TooltipContent>
+                        </Tooltip>
                         <EditableTextItem
                           id={item.actionItemId}
                           initialText={item.actionItem}
@@ -648,6 +688,50 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
           ))}
         </Accordion>
       </TooltipProvider>
+      {/* Enhance with Audio Modal */}
+      <Dialog open={enhanceModalOpen} onOpenChange={setEnhanceModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enhance {enhanceTarget?.type === 'category' ? 'Category' : 'Action Item'} with Audio</DialogTitle>
+            <DialogDescription>
+              Record a voice note to enhance this {enhanceTarget?.type === 'category' ? 'category' : 'action item'}. The new audio will be used to update the description or next steps.
+            </DialogDescription>
+          </DialogHeader>
+          {enhanceTarget && (
+            <AudioRecorderWrapper
+              onTranscriptProcessed={async (transcript) => {
+                setEnhanceLoading(true);
+                try {
+                  const res = await fetch('/api/enhance-item-or-category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      id: enhanceTarget.id,
+                      type: enhanceTarget.type,
+                      transcript,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Failed to enhance item');
+                  }
+                  toast({ title: 'Item enhanced!', description: 'The item was updated with your audio.' });
+                  router.refresh();
+                } catch (err) {
+                  toast({ title: 'Enhancement failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+                } finally {
+                  setEnhanceLoading(false);
+                  setEnhanceModalOpen(false);
+                  setEnhanceTarget(null);
+                }
+              }}
+            />
+          )}
+          {enhanceLoading && (
+            <div className="text-center py-4 text-muted-foreground">Enhancing, please wait...</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
