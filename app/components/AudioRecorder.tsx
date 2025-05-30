@@ -23,6 +23,8 @@ export function AudioRecorder({ onRecordingComplete }: AudioRecorderProps) {
           mimeType = 'audio/mp4';
         } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) && MediaRecorder.isTypeSupported('audio/aac')) {
           mimeType = 'audio/aac';
+        } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) && MediaRecorder.isTypeSupported('audio/wav')) {
+          mimeType = 'audio/wav';
         } else if (MediaRecorder.isTypeSupported('audio/webm')) {
           mimeType = 'audio/webm';
         } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
