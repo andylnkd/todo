@@ -66,6 +66,17 @@ interface ActionItemsTableProps {
 
 type SortOption = 'dueDate' | 'name' | 'recent';
 
+// Emoji mapping function
+function getEmojiForCategory(name: string): string {
+  const lower = name.toLowerCase();
+  if (/(google|roadmap|work|GLVM|office|job|project)/.test(lower)) return '💼';
+  if (/startup|business|company|entrepreneur|founder|investor|vc|venture|angel|fund|seed|seriesd/.test(lower)) return '🚀';
+  if (/(personal|home|family)/.test(lower)) return '🏠';
+  if (/(sport|game|fitness|exercise)/.test(lower)) return '🏅';
+  if (/(health|doctor|wellness|medicine)/.test(lower)) return '🩺';
+  return '👨';
+}
+
 const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onSaveNextStep, onToggleNextStepCompleted, onAddNextStep, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory }) => {
   const router = useRouter();
   const { toast } = useToast();
@@ -390,6 +401,15 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
       .flatMap(cat => cat.items);
   }, [categories, selectedCategories]);
 
+  // Compute emojis for all categories once using useMemo
+  const categoryEmojis = useMemo(() => {
+    const map: Record<string, string> = {};
+    sortedCategories.forEach((category) => {
+      map[category.id] = getEmojiForCategory(category.name);
+    });
+    return map;
+  }, [sortedCategories]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -555,137 +575,140 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
 
       <TooltipProvider>
         <Accordion type="multiple" className="w-full space-y-4">
-          {sortedCategories.map((category) => (
-            <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  checked={selectedCategories.includes(category.id)}
-                  onCheckedChange={() => handleCategorySelect(category.id)}
-                  className="mt-4"
-                />
-                <AccordionTrigger className="flex-1 hover:no-underline">
-                  <div className="flex items-center gap-2">
-                    <span>{category.name}</span>
-                    {getEarliestDueDate(category) && (
-                      <span className="text-sm text-muted-foreground">
-                        Due: {format(getEarliestDueDate(category)!, 'MMM d')}
-                      </span>
-                    )}
-                  </div>
-                </AccordionTrigger>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-primary"
-                      onClick={() => {
-                        setEnhanceTarget({ id: category.id, type: 'category' });
-                        setEnhanceModalOpen(true);
-                      }}
-                    >
-                      <Mic className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Enhance Category with Audio</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive"
-                  onClick={() => handleDeleteCategory(category.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <AccordionContent className="px-4 pb-4">
-                <div className="mb-4">
-                  <EditableTextItem
-                    id={category.id}
-                    initialText={category.name}
-                    onSave={handleSaveCategory}
-                    itemTypeLabel="Category"
+          {sortedCategories.map((category) => {
+            const emoji = categoryEmojis[category.id];
+            return (
+              <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={selectedCategories.includes(category.id)}
+                    onCheckedChange={() => handleCategorySelect(category.id)}
+                    className="mt-4"
                   />
-                </div>
-                <div className="space-y-4">
-                  {category.items.map((item) => (
-                    <div 
-                      key={item.actionItemId} 
-                      className={cn(
-                        "space-y-2 p-3 rounded-lg border transition-colors",
-                        isSelected(item.actionItemId) && "bg-secondary/30 border-secondary"
+                  <AccordionTrigger className="flex-1 hover:no-underline">
+                    <div className="flex items-center gap-2">
+                      <span>{emoji} {category.name}</span>
+                      {getEarliestDueDate(category) && (
+                        <span className="text-sm text-muted-foreground">
+                          Due: {format(getEarliestDueDate(category)!, 'MMM d')}
+                        </span>
                       )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center">
-                              <Checkbox
-                                id={`select-${item.actionItemId}`}
-                                checked={isSelected(item.actionItemId)}
-                                onCheckedChange={() => toggleItem(item.actionItemId)}
-                                className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                              />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Select for sharing</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-primary"
-                              onClick={() => {
-                                setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
-                                setEnhanceModalOpen(true);
-                              }}
-                            >
-                              <Mic className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Enhance with Audio</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <EditableTextItem
-                          id={item.actionItemId}
-                          initialText={item.actionItem}
-                          onSave={handleSaveActionItem}
-                          itemTypeLabel="Action Item"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive"
-                          onClick={() => handleDeleteActionItem(item.actionItemId)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <div className="space-y-2 pl-7">
-                        {item.nextSteps.map((nextStep) => (
-                          <EditableNextStep
-                            key={nextStep.id}
-                            id={nextStep.id}
-                            initialText={nextStep.text}
-                            initialCompleted={nextStep.completed}
-                            initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
-                            onSave={handleSaveNextStep}
-                            onDelete={handleDeleteNextStep}
-                          />
-                        ))}
-                      </div>
                     </div>
-                  ))}
+                  </AccordionTrigger>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-primary"
+                        onClick={() => {
+                          setEnhanceTarget({ id: category.id, type: 'category' });
+                          setEnhanceModalOpen(true);
+                        }}
+                      >
+                        <Mic className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Enhance Category with Audio</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive"
+                    onClick={() => handleDeleteCategory(category.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
+                <AccordionContent className="px-4 pb-4">
+                  <div className="mb-4">
+                    <EditableTextItem
+                      id={category.id}
+                      initialText={category.name}
+                      onSave={handleSaveCategory}
+                      itemTypeLabel="Category"
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    {category.items.map((item) => (
+                      <div 
+                        key={item.actionItemId} 
+                        className={cn(
+                          "space-y-2 p-3 rounded-lg border transition-colors",
+                          isSelected(item.actionItemId) && "bg-secondary/30 border-secondary"
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center">
+                                <Checkbox
+                                  id={`select-${item.actionItemId}`}
+                                  checked={isSelected(item.actionItemId)}
+                                  onCheckedChange={() => toggleItem(item.actionItemId)}
+                                  className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                                />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Select for sharing</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-primary"
+                                onClick={() => {
+                                  setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
+                                  setEnhanceModalOpen(true);
+                                }}
+                              >
+                                <Mic className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Enhance with Audio</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <EditableTextItem
+                            id={item.actionItemId}
+                            initialText={item.actionItem}
+                            onSave={handleSaveActionItem}
+                            itemTypeLabel="Action Item"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-destructive"
+                            onClick={() => handleDeleteActionItem(item.actionItemId)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="space-y-2 pl-7">
+                          {item.nextSteps.map((nextStep) => (
+                            <EditableNextStep
+                              key={nextStep.id}
+                              id={nextStep.id}
+                              initialText={nextStep.text}
+                              initialCompleted={nextStep.completed}
+                              initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
+                              onSave={handleSaveNextStep}
+                              onDelete={handleDeleteNextStep}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
         </Accordion>
       </TooltipProvider>
       {/* Enhance with Audio Modal */}

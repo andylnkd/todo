@@ -6,7 +6,7 @@ import { auth } from '@clerk/nextjs/server'; // Correct import for server compon
 import { redirect } from 'next/navigation';
 import { db } from '../../drizzle/db'; // Corrected path
 import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '../../drizzle/schema'; // Corrected path
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache'; // Import for revalidation
 import { Button } from '@/components/ui/button';
 import { Combine } from 'lucide-react';
@@ -202,6 +202,27 @@ async function deleteCategory(id: string) {
   if (!userId) throw new Error('Unauthorized');
 
   try {
+    // 1. Find all action item IDs for this category
+    const actionItems = await db.select({ id: actionItemsTable.id })
+      .from(actionItemsTable)
+      .where(and(eq(actionItemsTable.categoryId, id), eq(actionItemsTable.userId, userId)));
+    const actionItemIds = actionItems.map(ai => ai.id);
+
+    if (actionItemIds.length > 0) {
+      // 2. Delete all next steps for these action items
+      await db.delete(nextStepsTable)
+        .where(and(
+          inArray(nextStepsTable.actionItemId, actionItemIds),
+          eq(nextStepsTable.userId, userId)
+        ));
+      // 3. Delete all action items for this category
+      await db.delete(actionItemsTable)
+        .where(and(
+          inArray(actionItemsTable.id, actionItemIds),
+          eq(actionItemsTable.userId, userId)
+        ));
+    }
+    // 4. Delete the category
     await db.delete(categoriesTable)
       .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)));
     revalidatePath('/dashboard'); // Revalidate to show changes
