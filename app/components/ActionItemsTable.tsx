@@ -9,7 +9,7 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic } from 'lucide-react';
+import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -60,7 +60,7 @@ interface ActionItemsTableProps {
   onDeleteNextStep: (id: string) => Promise<void>;
   onAddActionItem: (categoryId: string, text: string) => Promise<void>;
   onDeleteActionItem: (id: string) => Promise<void>;
-  onAddCategory: (name: string) => Promise<void>;
+  onAddCategory: (name: string) => Promise<string>;
   onDeleteCategory: (id: string) => Promise<void>;
 }
 
@@ -95,6 +95,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const [enhanceModalOpen, setEnhanceModalOpen] = useState(false);
   const [enhanceTarget, setEnhanceTarget] = useState<{ id: string, type: 'actionItem' | 'category' } | null>(null);
   const [enhanceLoading, setEnhanceLoading] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [quickInputText, setQuickInputText] = useState('');
+  const [quickActionItemText, setQuickActionItemText] = useState('');
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -221,8 +224,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   // Function to handle adding a new category
   const handleAddCategory = async (name: string) => {
     try {
-      await onAddCategory(name);
+      const newCategoryId = await onAddCategory(name);
       router.refresh(); // Refresh to show changes
+      return newCategoryId;
     } catch (error) {
       console.error('Failed to add category:', error);
       toast({
@@ -230,6 +234,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         description: "Failed to add category.",
         variant: "destructive",
       });
+      return null;
     }
   };
 
@@ -410,42 +415,127 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     return map;
   }, [sortedCategories]);
 
+  const handleQuickAdd = async () => {
+    if (selectedCategoryId === '__new__') {
+      if (!quickInputText.trim() || !quickActionItemText.trim()) return;
+      try {
+        const newCategoryId = await handleAddCategory(quickInputText);
+        if (newCategoryId) {
+          await onAddActionItem(newCategoryId, quickActionItemText);
+          setSelectedCategoryId('');
+        }
+        setQuickInputText('');
+        setQuickActionItemText('');
+        router.refresh();
+      } catch (error) {
+        toast({ title: "Error adding item", variant: "destructive" });
+      }
+    } else if (selectedCategoryId) {
+      if (!quickInputText.trim()) return;
+      try {
+        await onAddActionItem(selectedCategoryId, quickInputText);
+        setSelectedCategoryId('');
+        setQuickInputText('');
+        router.refresh();
+      } catch (error) {
+        toast({ title: "Error adding item", variant: "destructive" });
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
+      {/* Quick Add Controls at the Top */}
+      <div className="flex flex-col sm:flex-row gap-2 items-center justify-between pb-2 border-b">
+        <div className="flex gap-2 items-center w-full sm:w-auto">
+          <Button
+            onClick={handleQuickAdd}
+            disabled={selectedCategoryId === '__new__' ? !(quickInputText && quickActionItemText) : !quickInputText}
+            className="flex-shrink-0"
+            aria-label="Add item"
+            variant="secondary"
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+          <span role="img" aria-label="Keyboard" className="text-2xl">⌨️</span>
+          <Select value={selectedCategoryId} onValueChange={(value: string) => setSelectedCategoryId(value)}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map(category => (
+                <SelectItem key={category.id} value={category.id}>
+                  {getEmojiForCategory(category.name)} {category.name}
+                </SelectItem>
+              ))}
+              <SelectItem value="__new__">+ New Category</SelectItem>
+            </SelectContent>
+          </Select>
+          {selectedCategoryId === '__new__' ? (
+            <>
+              <Input
+                placeholder="New category name..."
+                value={quickInputText}
+                onChange={e => setQuickInputText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleQuickAdd()}
+                className="w-full sm:w-48"
+                aria-label="New category name"
+              />
+              <Input
+                placeholder="First action item..."
+                value={quickActionItemText}
+                onChange={e => setQuickActionItemText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleQuickAdd()}
+                className="w-full sm:w-64"
+                aria-label="First action item"
+              />
+            </>
+          ) : (
+            <Input
+              placeholder="Type to add..."
+              value={quickInputText}
+              onChange={e => setQuickInputText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleQuickAdd()}
+              className="w-full sm:w-64"
+              aria-label="Add new item"
+            />
+          )}
+        </div>
+        {/* Existing controls: Search, Sort, etc. */}
+        <div className="flex gap-2 items-center w-full sm:w-auto mt-2 sm:mt-0">
           <Input
             type="text"
             placeholder="Search items..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
             className="pl-10 pr-8"
           />
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           {searchQuery && (
             <Button
               variant="ghost"
               size="icon"
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
+              className="h-6 w-6 p-0 hover:bg-transparent"
               onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
             >
               <X className="h-4 w-4 text-muted-foreground" />
             </Button>
           )}
+          <Select value={sortBy} onValueChange={value => setSortBy(value as SortOption)}>
+            <SelectTrigger className="w-[140px]">
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="h-4 w-4" />
+                <SelectValue placeholder="Sort by..." />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dueDate">Due Date</SelectItem>
+              <SelectItem value="name">Category Name</SelectItem>
+              <SelectItem value="recent">Recently Added</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-          <SelectTrigger className="w-[180px]">
-            <div className="flex items-center gap-2">
-              <ArrowUpDown className="h-4 w-4" />
-              <SelectValue placeholder="Sort by..." />
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="dueDate">Due Date</SelectItem>
-            <SelectItem value="name">Category Name</SelectItem>
-            <SelectItem value="recent">Recently Added</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
       
       {selectedCategories.length >= 2 && (

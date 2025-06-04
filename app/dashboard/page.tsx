@@ -178,18 +178,17 @@ async function deleteActionItem(id: string) {
   }
 }
 
-async function addCategory(name: string) {
+async function addCategory(name: string): Promise<string> {
   'use server';
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
   try {
-    await db.insert(categoriesTable)
-      .values({
-        name,
-        userId
-      });
-    revalidatePath('/dashboard'); // Revalidate to show changes
+    const [inserted] = await db.insert(categoriesTable)
+      .values({ name, userId })
+      .returning({ id: categoriesTable.id });
+    revalidatePath('/dashboard');
+    return inserted.id;
   } catch (error) {
     console.error("Failed to add category:", error);
     throw new Error("Failed to add category.");
