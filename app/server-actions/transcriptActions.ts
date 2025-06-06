@@ -290,4 +290,44 @@ export async function enhanceItemOrCategory({
   } else {
     throw new Error('Invalid type');
   }
+}
+
+/**
+ * Save extracted items as a new category and action items (from image extraction, etc.)
+ */
+export async function processExtractedItemsAndSave({
+  items,
+  userId,
+  categoryName = 'Extracted from Image',
+}: {
+  items: string[];
+  userId: string;
+  categoryName?: string;
+}) {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error('No items to save');
+  }
+  let createdCategory: { id: string; name: string } | undefined;
+  let createdItems: { id: string; actionItem: string }[] = [];
+  await db.transaction(async (tx) => {
+    // Create category
+    const [category] = await tx.insert(schema.categories).values({
+      name: categoryName,
+      userId,
+    }).returning({ id: schema.categories.id, name: schema.categories.name });
+    if (!category) throw new Error('Failed to create category');
+    createdCategory = category;
+    // Insert action items
+    for (const item of items) {
+      const [actionItem] = await tx.insert(schema.actionItems).values({
+        categoryId: category.id,
+        actionItem: item,
+        userId,
+        status: 'pending',
+        type: 'regular',
+      }).returning({ id: schema.actionItems.id, actionItem: schema.actionItems.actionItem });
+      if (actionItem) createdItems.push(actionItem);
+    }
+  });
+  return { category: createdCategory, items: createdItems };
 } 

@@ -23,6 +23,8 @@ import SendWhatsAppButton from '../components/SendWhatsAppButton';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
 import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
+import ImageUploadDialog from '../components/ImageUploadDialogClientWrapper';
+import AddNewItemsCard from '../components/AddNewItemsCard';
 
 // Define the expected data structure for the table
 interface NextStepDetail {
@@ -349,7 +351,7 @@ export default async function Dashboard() {
               <CardTitle>Add New Items</CardTitle>
             </CardHeader>
             <CardContent>
-              <AudioRecorderWrapper onTranscriptProcessed={handleDashboardTranscriptProcessed} />
+              <AddNewItemsCard onTranscriptProcessed={handleDashboardTranscriptProcessed} />
             </CardContent>
           </Card>
 
