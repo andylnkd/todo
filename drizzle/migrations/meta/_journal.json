@@ -36,6 +36,13 @@
       "when": 1748317633100,
       "tag": "0004_opposite_husk",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1749366170805,
+      "tag": "0005_new_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

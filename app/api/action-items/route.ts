@@ -11,18 +11,19 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id, actionItem, categoryId } = await request.json();
-    if (!id || (!actionItem && !categoryId)) {
+    const { id, actionItem, categoryId, dueDate } = await request.json();
+    if (!id || (!actionItem && !categoryId && dueDate === undefined)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Update action item text and/or category
+    // Update action item text, category, and/or due date
     const updateData: any = {
       updatedAt: new Date()
     };
-    
     if (actionItem) updateData.actionItem = actionItem;
     if (categoryId) updateData.categoryId = categoryId;
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+    console.log('Updating action item:', { id, actionItem, categoryId, dueDate });
 
     const result = await db
       .update(actionItems)
@@ -36,7 +37,8 @@ export async function PATCH(request: NextRequest) {
       .returning({ 
         id: actionItems.id, 
         actionItem: actionItems.actionItem,
-        categoryId: actionItems.categoryId 
+        categoryId: actionItems.categoryId,
+        dueDate: actionItems.dueDate
       });
 
     if (!result.length) {

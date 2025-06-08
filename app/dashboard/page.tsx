@@ -302,6 +302,7 @@ export default async function Dashboard() {
             category.items.set(actionItemId, {
               actionItemId,
               actionItem: row.action_items.actionItem,
+              dueDate: row.action_items.dueDate ? row.action_items.dueDate : null,
               nextSteps: []
             });
           }

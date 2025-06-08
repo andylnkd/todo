@@ -9,7 +9,7 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic, Plus } from 'lucide-react';
+import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic, Plus, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -26,6 +26,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import AudioRecorderWrapper from './AudioRecorderWrapper';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 
 // Define the detailed structure for a next step
 interface NextStepDetail {
@@ -39,7 +41,8 @@ interface NextStepDetail {
 interface ActionItemWithNextSteps {
   actionItemId: string;
   actionItem: string;
-  nextSteps: NextStepDetail[]; // Use the detailed structure
+  dueDate?: string | null;
+  nextSteps: NextStepDetail[];
 }
 
 // Define the structure for a category, containing its details and action items
@@ -53,7 +56,7 @@ interface Category {
 interface ActionItemsTableProps {
   categories: Category[]; // Expect an array of the updated Category structure
   onSaveCategory: (id: string, newName: string) => Promise<void>;
-  onSaveActionItem: (id: string, newText: string) => Promise<void>;
+  onSaveActionItem: (id: string, newText: string, newDueDate?: Date | null) => Promise<void>;
   onSaveNextStep: (id: string, newText: string) => Promise<void>;
   onToggleNextStepCompleted: (id: string, completed: boolean) => Promise<void>;
   onAddNextStep: (actionItemId: string, text: string) => Promise<void>;
@@ -115,9 +118,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   };
 
   // Function to handle saving action item edits
-  const handleSaveActionItem = async (id: string, newText: string) => {
+  const handleSaveActionItem = async (id: string, newText: string, newDueDate?: Date | null) => {
     try {
-      await onSaveActionItem(id, newText);
+      await onSaveActionItem(id, newText, newDueDate || null);
       router.refresh(); // Refresh to show changes
     } catch (error) {
       console.error('Failed to update action item:', error);
@@ -722,78 +725,109 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                     />
                   </div>
                   <div className="space-y-4">
-                    {category.items.map((item) => (
-                      <div 
-                        key={item.actionItemId} 
-                        className={cn(
-                          "space-y-2 p-3 rounded-lg border transition-colors",
-                          isSelected(item.actionItemId) && "bg-secondary/30 border-secondary"
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="flex items-center">
-                                <Checkbox
-                                  id={`select-${item.actionItemId}`}
-                                  checked={isSelected(item.actionItemId)}
-                                  onCheckedChange={() => toggleItem(item.actionItemId)}
-                                  className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                                />
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Select for sharing</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-primary"
-                                onClick={() => {
-                                  setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
-                                  setEnhanceModalOpen(true);
-                                }}
-                              >
-                                <Mic className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Enhance with Audio</p>
-                            </TooltipContent>
-                          </Tooltip>
-                          <EditableTextItem
-                            id={item.actionItemId}
-                            initialText={item.actionItem}
-                            onSave={handleSaveActionItem}
-                            itemTypeLabel="Action Item"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive"
-                            onClick={() => handleDeleteActionItem(item.actionItemId)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <div className="space-y-2 pl-7">
-                          {item.nextSteps.map((nextStep) => (
-                            <EditableNextStep
-                              key={nextStep.id}
-                              id={nextStep.id}
-                              initialText={nextStep.text}
-                              initialCompleted={nextStep.completed}
-                              initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
-                              onSave={handleSaveNextStep}
-                              onDelete={handleDeleteNextStep}
+                    {category.items.map((item) => {
+                      const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate) : null);
+                      const [isSavingDueDate, setIsSavingDueDate] = useState(false);
+                      const handleDueDateChange = async (date: Date | null) => {
+                        setDueDate(date);
+                        setIsSavingDueDate(true);
+                        try {
+                          await handleSaveActionItem(item.actionItemId, item.actionItem, date);
+                        } finally {
+                          setIsSavingDueDate(false);
+                        }
+                      };
+                      return (
+                        <div 
+                          key={item.actionItemId} 
+                          className={cn(
+                            "space-y-2 p-3 rounded-lg border transition-colors",
+                            isSelected(item.actionItemId) && "bg-secondary/30 border-secondary"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center">
+                                  <Checkbox
+                                    id={`select-${item.actionItemId}`}
+                                    checked={isSelected(item.actionItemId)}
+                                    onCheckedChange={() => toggleItem(item.actionItemId)}
+                                    className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                                  />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Select for sharing</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-primary"
+                                  onClick={() => {
+                                    setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
+                                    setEnhanceModalOpen(true);
+                                  }}
+                                >
+                                  <Mic className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Enhance with Audio</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <EditableTextItem
+                              id={item.actionItemId}
+                              initialText={item.actionItem}
+                              onSave={handleSaveActionItem}
+                              itemTypeLabel="Action Item"
                             />
-                          ))}
+                            {/* Due Date Popover: Always show calendar icon, open date picker on click */}
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" disabled={isSavingDueDate}>
+                                  <CalendarIcon className="h-4 w-4" />
+                                  {dueDate && <span className="ml-1 text-xs">{format(dueDate, 'MMM d')}</span>}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                  mode="single"
+                                  selected={dueDate || undefined}
+                                  onSelect={(date) => handleDueDateChange(date || null)}
+                                  disabled={isSavingDueDate}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-destructive"
+                              onClick={() => handleDeleteActionItem(item.actionItemId)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="space-y-2 pl-7">
+                            {item.nextSteps.map((nextStep) => (
+                              <EditableNextStep
+                                key={nextStep.id}
+                                id={nextStep.id}
+                                initialText={nextStep.text}
+                                initialCompleted={nextStep.completed}
+                                initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
+                                onSave={handleSaveNextStep}
+                                onDelete={handleDeleteNextStep}
+                              />
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -805,9 +839,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
       <Dialog open={enhanceModalOpen} onOpenChange={setEnhanceModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Enhance {enhanceTarget?.type === 'category' ? 'Category' : 'Action Item'} with Audio</DialogTitle>
+            <DialogTitle>Enhance {enhanceTarget ? (enhanceTarget.type === 'category' ? 'Category' : 'Action Item') : ''} with Audio</DialogTitle>
             <DialogDescription>
-              Record a voice note to enhance this {enhanceTarget?.type === 'category' ? 'category' : 'action item'}. The new audio will be used to update the description or next steps.
+              Record a voice note to enhance this {enhanceTarget ? (enhanceTarget.type === 'category' ? 'category' : 'action item') : ''}. The new audio will be used to update the description or next steps.
             </DialogDescription>
           </DialogHeader>
           {enhanceTarget && (

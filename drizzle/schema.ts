@@ -21,6 +21,7 @@ export const actionItems = pgTable('action_items', {
   userId: varchar('user_id', { length: 255 }).notNull(), // Clerk user ID
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  dueDate: timestamp('due_date'),
 });
 
 // Next steps table
