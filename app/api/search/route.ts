@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
             nextStepId: nextSteps.id,
             nextStepText: nextSteps.step,
             nextStepCompleted: nextSteps.completed,
+            dueDate: actionItems.dueDate
         })
         .from(categories)
         .leftJoin(actionItems, eq(categories.id, actionItems.categoryId))
@@ -57,6 +58,7 @@ export async function GET(req: NextRequest) {
                 acc[row.categoryId].items[row.actionItemId] = {
                     actionItemId: row.actionItemId,
                     actionItem: row.actionItemText,
+                    dueDate: row.dueDate,
                     nextSteps: []
                 };
             }
@@ -78,6 +80,7 @@ export async function GET(req: NextRequest) {
             items: Object.values(category.items)
         }));
 
+        console.log('Final results:', JSON.stringify(finalResults, null, 2));
         return NextResponse.json(finalResults);
 
     } catch (error) {

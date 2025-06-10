@@ -63,14 +63,19 @@ async function saveCategoryName(id: string, newName: string) {
   }
 }
 
-async function saveActionItemText(id: string, newText: string) {
+async function saveActionItemText(id: string, newText: string, newDueDate?: Date | null) {
   'use server';
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
   try {
+    const updateData: any = { actionItem: newText, updatedAt: new Date() };
+    if (newDueDate !== undefined) {
+      updateData.dueDate = newDueDate;
+    }
+    
     await db.update(actionItemsTable)
-      .set({ actionItem: newText, updatedAt: new Date() })
+      .set(updateData)
       .where(and(eq(actionItemsTable.id, id), eq(actionItemsTable.userId, userId)));
     revalidatePath('/dashboard'); // Revalidate to show changes
   } catch (error) {

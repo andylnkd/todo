@@ -114,6 +114,11 @@ export default function EditableNextStep({
         <Input
           value={editedText}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditedText(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter') {
+              handleSaveText();
+            }
+          }}
           className="flex-1 h-8"
           placeholder="Enter next step"
           disabled={isLoading}

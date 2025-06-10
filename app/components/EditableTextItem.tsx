@@ -55,6 +55,11 @@ export default function EditableTextItem({ id, initialText, itemTypeLabel, onSav
         <Input
           value={editedText}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditedText(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter') {
+              handleSave();
+            }
+          }}
           className="flex-1"
           placeholder={`Enter ${itemTypeLabel} text`}
           disabled={isLoading}

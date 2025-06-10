@@ -29,7 +29,7 @@ import AudioRecorderWrapper from './AudioRecorderWrapper';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 
-// Define the detailed structure for a next step
+// Move the ActionItemWithNextSteps type definition here for use in ActionItemRow
 interface NextStepDetail {
   id: string;
   text: string;
@@ -37,7 +37,6 @@ interface NextStepDetail {
   dueDate?: Date | null;
 }
 
-// Define the structure for an action item, containing its details and next steps
 interface ActionItemWithNextSteps {
   actionItemId: string;
   actionItem: string;
@@ -78,6 +77,121 @@ function getEmojiForCategory(name: string): string {
   if (/(sport|game|fitness|exercise)/.test(lower)) return '🏅';
   if (/(health|doctor|wellness|medicine)/.test(lower)) return '🩺';
   return '👨';
+}
+
+// Add this new child component above the main ActionItemsTable component
+interface ActionItemRowProps {
+  item: ActionItemWithNextSteps;
+  isSelected: boolean;
+  onSaveActionItem: (id: string, newText: string, newDueDate?: Date | null) => Promise<void>;
+  toggleItem: (id: string) => void;
+  handleDeleteActionItem: (id: string) => void;
+  setEnhanceTarget: (target: { id: string, type: 'actionItem' | 'category' }) => void;
+  setEnhanceModalOpen: (open: boolean) => void;
+  handleSaveNextStep: (id: string, newText: string, newCompleted: boolean, newDueDate: Date | null) => Promise<void>;
+  handleDeleteNextStep: (id: string) => Promise<void>;
+}
+
+function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleDeleteActionItem, setEnhanceTarget, setEnhanceModalOpen, handleSaveNextStep, handleDeleteNextStep }: ActionItemRowProps) {
+  const [dueDate, setDueDate] = React.useState<Date | null>(item.dueDate ? new Date(item.dueDate) : null);
+  const [isSavingDueDate, setIsSavingDueDate] = React.useState(false);
+
+  const handleDueDateChange = async (date: Date | null) => {
+    setDueDate(date);
+    setIsSavingDueDate(true);
+    try {
+      await onSaveActionItem(item.actionItemId, item.actionItem, date);
+    } finally {
+      setIsSavingDueDate(false);
+    }
+  };
+
+  return (
+    <div className={cn(
+      "space-y-2 p-3 rounded-lg border transition-colors",
+      isSelected && "bg-secondary/30 border-secondary"
+    )}>
+      <div className="flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center">
+              <Checkbox
+                id={`select-${item.actionItemId}`}
+                checked={isSelected}
+                onCheckedChange={() => toggleItem(item.actionItemId)}
+                className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Select for sharing</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-primary"
+              onClick={() => {
+                setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
+                setEnhanceModalOpen(true);
+              }}
+            >
+              <Mic className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Enhance with Audio</p>
+          </TooltipContent>
+        </Tooltip>
+        <EditableTextItem
+          id={item.actionItemId}
+          initialText={item.actionItem}
+          onSave={onSaveActionItem}
+          itemTypeLabel="Action Item"
+        />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="sm" disabled={isSavingDueDate}>
+              <CalendarIcon className="h-4 w-4" />
+              {dueDate && <span className="ml-1 text-xs">{format(dueDate, 'MMM d')}</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="single"
+              selected={dueDate || undefined}
+              onSelect={(date: Date | undefined) => handleDueDateChange(date || null)}
+              disabled={isSavingDueDate}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-destructive"
+          onClick={() => handleDeleteActionItem(item.actionItemId)}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+      <div className="space-y-2 pl-7">
+        {item.nextSteps.map((nextStep) => (
+          <EditableNextStep
+            key={nextStep.id}
+            id={nextStep.id}
+            initialText={nextStep.text}
+            initialCompleted={nextStep.completed}
+            initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
+            onSave={handleSaveNextStep}
+            onDelete={handleDeleteNextStep}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onSaveNextStep, onToggleNextStepCompleted, onAddNextStep, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory }) => {
@@ -725,109 +839,20 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                     />
                   </div>
                   <div className="space-y-4">
-                    {category.items.map((item) => {
-                      const [dueDate, setDueDate] = useState(item.dueDate ? new Date(item.dueDate) : null);
-                      const [isSavingDueDate, setIsSavingDueDate] = useState(false);
-                      const handleDueDateChange = async (date: Date | null) => {
-                        setDueDate(date);
-                        setIsSavingDueDate(true);
-                        try {
-                          await handleSaveActionItem(item.actionItemId, item.actionItem, date);
-                        } finally {
-                          setIsSavingDueDate(false);
-                        }
-                      };
-                      return (
-                        <div 
-                          key={item.actionItemId} 
-                          className={cn(
-                            "space-y-2 p-3 rounded-lg border transition-colors",
-                            isSelected(item.actionItemId) && "bg-secondary/30 border-secondary"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center">
-                                  <Checkbox
-                                    id={`select-${item.actionItemId}`}
-                                    checked={isSelected(item.actionItemId)}
-                                    onCheckedChange={() => toggleItem(item.actionItemId)}
-                                    className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                                  />
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Select for sharing</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-primary"
-                                  onClick={() => {
-                                    setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
-                                    setEnhanceModalOpen(true);
-                                  }}
-                                >
-                                  <Mic className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Enhance with Audio</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <EditableTextItem
-                              id={item.actionItemId}
-                              initialText={item.actionItem}
-                              onSave={handleSaveActionItem}
-                              itemTypeLabel="Action Item"
-                            />
-                            {/* Due Date Popover: Always show calendar icon, open date picker on click */}
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="ghost" size="sm" disabled={isSavingDueDate}>
-                                  <CalendarIcon className="h-4 w-4" />
-                                  {dueDate && <span className="ml-1 text-xs">{format(dueDate, 'MMM d')}</span>}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="end">
-                                <Calendar
-                                  mode="single"
-                                  selected={dueDate || undefined}
-                                  onSelect={(date) => handleDueDateChange(date || null)}
-                                  disabled={isSavingDueDate}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-destructive"
-                              onClick={() => handleDeleteActionItem(item.actionItemId)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <div className="space-y-2 pl-7">
-                            {item.nextSteps.map((nextStep) => (
-                              <EditableNextStep
-                                key={nextStep.id}
-                                id={nextStep.id}
-                                initialText={nextStep.text}
-                                initialCompleted={nextStep.completed}
-                                initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
-                                onSave={handleSaveNextStep}
-                                onDelete={handleDeleteNextStep}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {category.items.map((item) => (
+                      <ActionItemRow
+                        key={item.actionItemId}
+                        item={item}
+                        isSelected={isSelected(item.actionItemId)}
+                        onSaveActionItem={handleSaveActionItem}
+                        toggleItem={toggleItem}
+                        handleDeleteActionItem={handleDeleteActionItem}
+                        setEnhanceTarget={setEnhanceTarget}
+                        setEnhanceModalOpen={setEnhanceModalOpen}
+                        handleSaveNextStep={handleSaveNextStep}
+                        handleDeleteNextStep={handleDeleteNextStep}
+                      />
+                    ))}
                   </div>
                 </AccordionContent>
               </AccordionItem>
