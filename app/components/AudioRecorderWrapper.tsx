@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { AudioRecorder } from './AudioRecorder';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"; // Corrected import path assuming standard shadcn setup
 
@@ -58,24 +57,19 @@ export default function AudioRecorderWrapper({ onTranscriptProcessed }: AudioRec
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Record Voice Note</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col items-center gap-4">
-        <AudioRecorder onRecordingComplete={handleRecordingComplete} />
-        {isLoading && (
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mt-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Processing your recording...</span>
-          </div>
-        )}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm mt-2 w-full text-center">
-            {error}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col items-center gap-4">
+      <AudioRecorder onRecordingComplete={handleRecordingComplete} />
+      {isLoading && (
+        <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mt-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Processing your recording...</span>
+        </div>
+      )}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg text-sm mt-2 w-full text-center">
+          {error}
+        </div>
+      )}
+    </div>
   );
 } 
