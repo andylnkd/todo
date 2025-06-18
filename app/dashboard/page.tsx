@@ -345,7 +345,7 @@ export default async function Dashboard() {
                 Daily
               </Link>
             </div>
-            <UserButton afterSignOutUrl="/" />
+            <UserButton />
           </div>
         </div>
       </header>

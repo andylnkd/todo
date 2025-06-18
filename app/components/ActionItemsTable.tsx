@@ -9,7 +9,7 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic, Plus, CalendarIcon } from 'lucide-react';
+import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic, Plus, CalendarIcon, Timer } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import AudioRecorderWrapper from './AudioRecorderWrapper';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import PomodoroTimer from './PomodoroTimer';
 
 // Move the ActionItemWithNextSteps type definition here for use in ActionItemRow
 interface NextStepDetail {
@@ -95,6 +96,8 @@ interface ActionItemRowProps {
 function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleDeleteActionItem, setEnhanceTarget, setEnhanceModalOpen, handleSaveNextStep, handleDeleteNextStep }: ActionItemRowProps) {
   const [dueDate, setDueDate] = React.useState<Date | null>(item.dueDate ? new Date(item.dueDate) : null);
   const [isSavingDueDate, setIsSavingDueDate] = React.useState(false);
+  const [showTimer, setShowTimer] = React.useState(false);
+  const [pomodoroCount, setPomodoroCount] = React.useState(0);
 
   const handleDueDateChange = async (date: Date | null) => {
     setDueDate(date);
@@ -104,6 +107,11 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
     } finally {
       setIsSavingDueDate(false);
     }
+  };
+
+  const handlePomodoroComplete = () => {
+    setPomodoroCount(count => count + 1);
+    setShowTimer(false);
   };
 
   return (
@@ -168,6 +176,24 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
             />
           </PopoverContent>
         </Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowTimer(!showTimer)}
+              className={cn("h-6 gap-1", showTimer && "bg-secondary")}
+            >
+              <Timer className="h-3 w-3" />
+              {pomodoroCount > 0 && (
+                <span className="text-xs">{pomodoroCount}</span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{showTimer ? 'Hide' : 'Start'} Pomodoro Timer</p>
+          </TooltipContent>
+        </Tooltip>
         <Button
           variant="ghost"
           size="icon"
@@ -177,6 +203,11 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
           <Trash2 className="h-3 w-3" />
         </Button>
       </div>
+      {showTimer && (
+        <div className="flex justify-center pt-2">
+          <PomodoroTimer onComplete={handlePomodoroComplete} />
+        </div>
+      )}
       <div className="space-y-2 pl-7">
         {item.nextSteps.map((nextStep) => (
           <EditableNextStep
