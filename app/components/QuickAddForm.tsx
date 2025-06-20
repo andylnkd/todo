@@ -42,8 +42,9 @@ export default function QuickAddForm({ categories, onAddCategory, onAddActionIte
       }
       toast({ title: "Item added successfully!" });
       onClose(); // Close the form on success
-    } catch (error) {
-      toast({ title: "Error adding item", variant: "destructive" });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      toast({ title: "Error adding item", variant: "destructive", description: error.message });
     }
   };
 

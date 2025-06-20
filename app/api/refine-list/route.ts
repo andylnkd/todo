@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../drizzle/db';
-import {
-  categories as categoriesTable,
-  actionItems as actionItemsTable,
-  nextSteps as nextStepsTable,
-} from '../../../drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import * as schema from '../../../drizzle/schema';
+import { eq, desc, inArray, and } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { jsonrepair } from 'jsonrepair';
 
@@ -104,30 +100,30 @@ async function fetchAndFormatData(userId: string): Promise<CategoryWithItems[]> 
   // Fetch data (similar to dashboard)
   const userCategories = await db
     .select({
-      categoryId: categoriesTable.id,
-      categoryName: categoriesTable.name,
-      actionItemId: actionItemsTable.id,
-      actionItemText: actionItemsTable.actionItem,
-      nextStepId: nextStepsTable.id,
-      nextStepText: nextStepsTable.step,
-      nextStepCompleted: nextStepsTable.completed,
-      actionItemCreatedAt: actionItemsTable.createdAt,
+      categoryId: schema.categories.id,
+      categoryName: schema.categories.name,
+      actionItemId: schema.actionItems.id,
+      actionItemText: schema.actionItems.actionItem,
+      nextStepId: schema.nextSteps.id,
+      nextStepText: schema.nextSteps.step,
+      nextStepCompleted: schema.nextSteps.completed,
+      actionItemCreatedAt: schema.actionItems.createdAt,
     })
-    .from(categoriesTable)
+    .from(schema.categories)
     .leftJoin(
-      actionItemsTable,
-      eq(categoriesTable.id, actionItemsTable.categoryId)
+      schema.actionItems,
+      eq(schema.categories.id, schema.actionItems.categoryId)
     )
     .leftJoin(
-      nextStepsTable,
-      eq(actionItemsTable.id, nextStepsTable.actionItemId)
+      schema.nextSteps,
+      eq(schema.actionItems.id, schema.nextSteps.actionItemId)
     )
-    .where(eq(categoriesTable.userId, userId))
+    .where(eq(schema.categories.userId, userId))
     .orderBy(
-      desc(actionItemsTable.createdAt),
-      categoriesTable.name,
-      actionItemsTable.id,
-      nextStepsTable.id
+      desc(schema.actionItems.createdAt),
+      schema.categories.name,
+      schema.actionItems.id,
+      schema.nextSteps.id
     );
 
   // Process data (similar to dashboard)
@@ -205,6 +201,34 @@ function formatDataForPrompt(data: CategoryWithItems[]): any[] {
     }));
 }
 
+// Helper function to generate a unique request ID for logging
+function genRequestId() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+// Define the structure for suggestions from Gemini
+interface GeminiSuggestion {
+  category: string;
+  actionItem: string;
+  nextSteps: string[];
+}
+
+const PROMPT = `
+You are an expert at organizing tasks. Based on the following list of action items and categories, please refine and reorganize them into a more logical structure.
+The user wants a clear, actionable list. You can re-categorize items, merge similar tasks, and suggest new, more concise wording.
+Return the suggestions as a JSON object with a single key "suggestions" which is an array of objects.
+Each object should have "category", "actionItem", and "nextSteps" (an array of strings).
+
+Example:
+{
+  "suggestions": [
+    { "category": "Work", "actionItem": "Finish quarterly report", "nextSteps": ["Analyze sales data", "Create presentation slides"] }
+  ]
+}
+
+Here is the user's list:
+`;
+
 // --- API Route Handler ---
 
 export async function POST(request: NextRequest) {
@@ -214,133 +238,133 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'AI service not available due to configuration error.' }, { status: 503 }); // Service Unavailable
     }
 
-  try {
+   try {
+     const { userId } = await auth();
+     if (!userId) {
+       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+     }
+
+     // Fetch and format the current user data (full details)
+     const currentDataFull = await fetchAndFormatData(userId);
+
+     if (currentDataFull.length === 0) {
+       return NextResponse.json({ proposedStructure: [], changeSummary: "No changes suggested as the list is empty." }); // Return empty if no data
+     }
+
+     // Format data specifically for the prompt
+     const dataForPrompt = formatDataForPrompt(currentDataFull);
+
+     // Prepare the prompt for Gemini
+     const prompt = PROMPT_TEMPLATE.replace(
+       '__LIST_DATA__',
+       JSON.stringify(dataForPrompt, null, 2) // Pretty print simplified data for prompt
+     );
+
+     // Call Gemini API (first attempt)
+     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+     let result, response, text;
+     let parsedSuggestions: GeminiSuggestions;
+     let parseError: unknown, jsonMatch;
+     let step = 'first';
+     try {
+       result = await model.generateContent(prompt);
+       response = await result.response;
+       text = response.text();
+
+       try {
+           // Clean up potential markdown wrapping the JSON
+           const cleanedText = text.replace(/^```json\s*|```\s*$/g, '');
+           const repairedJson = jsonrepair(cleanedText);
+           parsedSuggestions = JSON.parse(repairedJson);
+       } catch (e) {
+           console.error("Failed to parse JSON from Gemini:", e);
+           console.error("Original Gemini response text for debugging:", text);
+           return NextResponse.json({ error: 'AI service returned invalid data format.' }, { status: 502 });
+       }
+
+       console.log(`[Refine] Successfully parsed suggestions at step: ${step}`);
+       return NextResponse.json({
+         proposedStructure: parsedSuggestions.proposedStructure,
+         changeSummary: parsedSuggestions.changeSummary
+       });
+
+     } catch (error: unknown) {
+       console.error('Error in /api/refine-list:', error);
+        // More robust check for Gemini API errors if possible (check error object structure)
+        if (error instanceof Error && error.message.includes('Request failed with status code')) { // Example check
+            console.error('Gemini API Request Error:', error);
+            return NextResponse.json({ error: 'AI service request failed.' }, { status: 502 }); // Bad Gateway
+        }
+       return NextResponse.json(
+         { error: 'Failed to get AI refinement suggestions due to an internal error.' },
+         { status: 500 }
+       );
+     }
+   } catch (err) {
+     const error = err instanceof Error ? err : new Error(String(err));
+     console.error('Error refining list:', error.stack || error.message);
+     return NextResponse.json({ error: 'Failed to refine list', details: error.message }, { status: 500 });
+   }
+}
+
+// This is the new endpoint that the mobile app will call to save the refined list.
+export async function PUT(request: NextRequest) {
     const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch and format the current user data (full details)
-    const currentDataFull = await fetchAndFormatData(userId);
-
-    if (currentDataFull.length === 0) {
-      return NextResponse.json({ proposedStructure: [], changeSummary: "No changes suggested as the list is empty." }); // Return empty if no data
-    }
-
-    // Format data specifically for the prompt
-    const dataForPrompt = formatDataForPrompt(currentDataFull);
-
-    // Prepare the prompt for Gemini
-    const prompt = PROMPT_TEMPLATE.replace(
-      '__LIST_DATA__',
-      JSON.stringify(dataForPrompt, null, 2) // Pretty print simplified data for prompt
-    );
-
-    // Call Gemini API (first attempt)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    let result, response, text, parsedSuggestions;
-    let parseError, jsonMatch;
-    let step = 'first';
     try {
-      result = await model.generateContent(prompt);
-      response = await result.response;
-      text = response.text();
-      console.log(`[Refine] Gemini first response:`, text.slice(0, 500));
-      // Try to parse
-      const cleanJson = text.replace(/^```json\s*|^\s*```$|\s*```$/gm, '').trim();
-      parsedSuggestions = JSON.parse(cleanJson);
-      step = 'first-parse';
-    } catch (err) {
-      parseError = err;
-      console.error('[Refine] First Gemini parse failed:', parseError);
-      // Try to extract JSON from within the text
-      jsonMatch = text && text.match(/\{[\s\S]*\}/);
-      if (jsonMatch && jsonMatch[0]) {
-        try {
-          parsedSuggestions = JSON.parse(jsonMatch[0]);
-          step = 'first-jsonMatch';
-          console.warn('[Refine] Successfully parsed JSON found within Gemini\'s raw response.');
-        } catch (nestedError) {
-          parseError = nestedError;
-          console.error('[Refine] Nested parsing error after trying to extract JSON:', nestedError);
-        }
-      }
+        const body = await request.json();
+        const { suggestions } = body;
+
+        // Start a transaction
+        await db.transaction(async (tx) => {
+            // Clear existing items for this user
+            // This is a destructive action, be careful.
+            // You might want a different strategy, like marking old items as archived.
+            const actionItemsToDelete = await tx.select({ id: schema.actionItems.id }).from(schema.actionItems).where(eq(schema.actionItems.userId, userId));
+            if (actionItemsToDelete.length > 0) {
+                const ids = actionItemsToDelete.map(i => i.id);
+                await tx.delete(schema.nextSteps).where(inArray(schema.nextSteps.actionItemId, ids));
+                await tx.delete(schema.actionItems).where(eq(schema.actionItems.userId, userId));
+            }
+            await tx.delete(schema.categories).where(eq(schema.categories.userId, userId));
+
+
+            // Insert new items
+            for (const suggestion of suggestions) {
+                // Find or create category
+                let [category] = await tx.select().from(schema.categories).where(and(eq(schema.categories.name, suggestion.category), eq(schema.categories.userId, userId)));
+                if (!category) {
+                    [category] = await tx.insert(schema.categories).values({ name: suggestion.category, userId }).returning();
+                }
+
+                // Insert action item
+                const [actionItem] = await tx.insert(schema.actionItems).values({
+                    categoryId: category.id,
+                    actionItem: suggestion.actionItem,
+                    userId,
+                }).returning();
+
+                // Insert next steps
+                if (suggestion.nextSteps && suggestion.nextSteps.length > 0) {
+                    await tx.insert(schema.nextSteps).values(
+                        suggestion.nextSteps.map((step: string) => ({
+                            actionItemId: actionItem.id,
+                            step,
+                            userId,
+                            completed: false,
+                        }))
+                    );
+                }
+            }
+        });
+
+        return NextResponse.json({ message: 'List refined and saved successfully' });
+    } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        console.error('Error saving refined list:', error.stack || error.message);
+        return NextResponse.json({ error: 'Failed to save refined list', details: error.message }, { status: 500 });
     }
-
-    // If still not parsed, retry with feedback to Gemini
-    if (!parsedSuggestions) {
-      console.log('[Refine] Retrying with feedback to Gemini...');
-      const feedbackPrompt = `The following output was supposed to be valid JSON but failed to parse with error: ${parseError instanceof Error ? parseError.message : String(parseError)}. Please correct it and return only valid JSON.\n\nOutput:\n${text}`;
-      try {
-        const retryResult = await model.generateContent(feedbackPrompt);
-        const retryResponse = await retryResult.response;
-        const retryText = retryResponse.text();
-        console.log('[Refine] Gemini retry response:', retryText.slice(0, 500));
-        const retryCleanJson = retryText.replace(/^```json\s*|^\s*```$|\s*```$/gm, '').trim();
-        parsedSuggestions = JSON.parse(retryCleanJson);
-        step = 'retry-parse';
-      } catch (retryErr) {
-        parseError = retryErr;
-        jsonMatch = text && text.match(/\{[\s\S]*\}/);
-        if (jsonMatch && jsonMatch[0]) {
-          try {
-            parsedSuggestions = JSON.parse(jsonMatch[0]);
-            step = 'retry-jsonMatch';
-            console.warn('[Refine] Successfully parsed JSON found within Gemini retry raw response.');
-          } catch (nestedError) {
-            parseError = nestedError;
-            console.error('[Refine] Nested parsing error after retry:', nestedError);
-          }
-        }
-      }
-    }
-
-    // If still not parsed, try jsonrepair
-    if (!parsedSuggestions && text) {
-      try {
-        console.log('[Refine] Attempting jsonrepair...');
-        parsedSuggestions = JSON.parse(jsonrepair(text));
-        step = 'jsonrepair';
-      } catch (repairErr) {
-        console.error('[Refine] jsonrepair failed:', repairErr);
-      }
-    }
-
-    // If still not parsed, return error
-    if (!parsedSuggestions) {
-      console.error('[Refine] Failed to parse AI suggestions after all attempts.');
-      return NextResponse.json(
-        { error: 'Failed to parse AI suggestions after retry and repair.' },
-        { status: 500 }
-      );
-    }
-
-    // Validate the structure
-    if (!parsedSuggestions || !Array.isArray(parsedSuggestions.proposedStructure) || typeof parsedSuggestions.changeSummary !== 'string') {
-         console.error('[Refine] Invalid structure in AI suggestions (expected proposedStructure array and changeSummary string):', parsedSuggestions);
-         return NextResponse.json(
-            { error: 'Received invalid structure from AI.' },
-            { status: 500 }
-         );
-    }
-
-    // Return the suggestions including the summary (do not apply changes)
-    console.log(`[Refine] Successfully parsed suggestions at step: ${step}`);
-    return NextResponse.json({
-      proposedStructure: parsedSuggestions.proposedStructure,
-      changeSummary: parsedSuggestions.changeSummary
-    });
-
-  } catch (error) {
-    console.error('Error in /api/refine-list:', error);
-     // More robust check for Gemini API errors if possible (check error object structure)
-     if (error instanceof Error && error.message.includes('Request failed with status code')) { // Example check
-         console.error('Gemini API Request Error:', error);
-         return NextResponse.json({ error: 'AI service request failed.' }, { status: 502 }); // Bad Gateway
-     }
-    return NextResponse.json(
-      { error: 'Failed to get AI refinement suggestions due to an internal error.' },
-      { status: 500 }
-    );
-  }
 } 

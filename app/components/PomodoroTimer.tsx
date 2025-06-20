@@ -14,30 +14,29 @@ const PomodoroTimer: React.FC<PomodoroTimerProps> = ({ onComplete }) => {
   const [isActive, setIsActive] = useState(false);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (isActive) {
-      interval = setInterval(() => {
-        if (seconds === 0) {
-          if (minutes === 0) {
-            clearInterval(interval);
-            alert('Pomodoro session complete!');
-            setIsActive(false);
-            if (onComplete) {
-              onComplete();
-            }
-          } else {
-            setMinutes(minutes - 1);
-            setSeconds(59);
-          }
-        } else {
-          setSeconds(seconds - 1);
-        }
-      }, 1000);
+    if (minutes === 0 && seconds === 0) {
+      if (onComplete) {
+        onComplete();
+      }
+      setIsActive(false);
     }
 
-    return () => clearInterval(interval);
-  }, [isActive, minutes, seconds]);
+    const timer =
+      isActive && (minutes > 0 || seconds > 0)
+        ? setInterval(() => {
+            if (seconds === 0) {
+              setMinutes(minutes - 1);
+              setSeconds(59);
+            } else {
+              setSeconds(seconds - 1);
+            }
+          }, 1000)
+        : null;
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [minutes, seconds, isActive, onComplete]);
 
   const startTimer = () => setIsActive(true);
   const pauseTimer = () => setIsActive(false);

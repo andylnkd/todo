@@ -1,28 +1,25 @@
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Wand2 } from "lucide-react";
 
-interface RefineListButtonProps {
-  categories: {
-    id: string;
-    name: string;
-    items: {
-      actionItemId: string;
-      actionItem: string;
-      nextSteps: {
-        id: string;
-        text: string;
-        completed: boolean;
-      }[];
-    }[];
+interface Category {
+  id: string;
+  name: string;
+  items: {
+    actionItemId: string;
+    actionItem: string;
+    nextSteps: { id: string; text: string; completed: boolean; dueDate?: Date | null; }[];
   }[];
-  onApplyRefinements: (refinements: any) => Promise<void>;
 }
 
-export function RefineListButton({ categories, onApplyRefinements }: RefineListButtonProps) {
+interface RefineListButtonProps {
+  categories: Category[];
+  onApply: (refinedStructure: any) => Promise<void>;
+}
+
+export function RefineListButton({ categories, onApply }: RefineListButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [suggestionsText, setSuggestionsText] = useState<string>("");
@@ -72,7 +69,7 @@ export function RefineListButton({ categories, onApplyRefinements }: RefineListB
     
     setIsDialogOpen(false);
     try {
-      await onApplyRefinements(proposedStructure);
+      await onApply(proposedStructure);
     } catch (error) {
       console.error('Failed to apply refinements:', error);
     }

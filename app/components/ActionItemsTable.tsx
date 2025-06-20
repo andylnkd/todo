@@ -1,7 +1,6 @@
 'use client'; // Make this a client component
 
 import React, { useState, useEffect, useMemo } from 'react';
-import EditableActionItem from './EditableActionItem'; // This should be removed too as it's replaced
 import { useRouter } from 'next/navigation'; // For refreshing data after update
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,7 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown, X, Merge, Check, Sparkles, Trash2, Mic, Plus, CalendarIcon, Timer } from 'lucide-react';
+import { Search, ArrowUpDown, X, Merge, Sparkles, Trash2, Mic, Plus, CalendarIcon, Timer } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -221,10 +220,8 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
 const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onSaveNextStep, onToggleNextStepCompleted, onAddNextStep, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory }) => {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Category[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('dueDate');
   const { toggleItem, isSelected } = useSelectedItems();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -302,21 +299,6 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     }
   };
 
-  // Function to handle adding a new next step
-  const handleAddNextStep = async (actionItemId: string, text: string) => {
-    try {
-      await onAddNextStep(actionItemId, text);
-      router.refresh(); // Refresh to show changes
-    } catch (error) {
-      console.error('Failed to add next step:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add next step.",
-        variant: "destructive",
-      });
-    }
-  };
-
   // Function to handle deleting a next step
   const handleDeleteNextStep = async (id: string) => {
     try {
@@ -327,21 +309,6 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
       toast({
         title: "Error",
         description: "Failed to delete next step.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Function to handle adding a new action item
-  const handleAddActionItem = async (categoryId: string, text: string) => {
-    try {
-      await onAddActionItem(categoryId, text);
-      router.refresh(); // Refresh to show changes
-    } catch (error) {
-      console.error('Failed to add action item:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add action item.",
         variant: "destructive",
       });
     }
@@ -398,7 +365,6 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   useEffect(() => {
     const searchTimeout = setTimeout(async () => {
       if (searchQuery.trim()) {
-        setIsSearching(true);
         try {
           const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery.trim())}`);
           if (!response.ok) {
@@ -412,8 +378,6 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
             description: "Could not perform search. Please try again.",
             variant: "destructive",
           });
-        } finally {
-          setIsSearching(false);
         }
       } else {
         setSearchResults([]);
@@ -473,16 +437,6 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         return categoriesToSort;
     }
   }, [categories, searchResults, searchQuery, sortBy]);
-
-  const displayCategories = searchQuery.trim() ? searchResults : categories;
-
-  const handleCategorySelect = (categoryId: string) => {
-    setSelectedCategories(prev => 
-      prev.includes(categoryId) 
-        ? prev.filter(id => id !== categoryId)
-        : [...prev, categoryId]
-    );
-  };
 
   const handleItemSelect = (itemId: string) => {
     setSelectedItems(prev => 

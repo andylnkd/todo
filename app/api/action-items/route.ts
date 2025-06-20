@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../drizzle/db';
 import { actionItems } from '../../../drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
+
+interface RequestBody {
+    actionItemIds: string[];
+}
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -49,5 +53,26 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error('Error updating action item:', error);
     return NextResponse.json({ error: 'Failed to update action item' }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    const body: RequestBody = await request.json();
+    const { actionItemIds } = body;
+
+    if (!actionItemIds || !Array.isArray(actionItemIds) || actionItemIds.length === 0) {
+      return new Response("Action item IDs are required", { status: 400 });
+    }
+
+    // ... existing code ...
+  } catch (error) {
+    console.error('Error processing action item:', error);
+    return new Response("Failed to process action items", { status: 500 });
   }
 } 

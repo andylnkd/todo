@@ -5,7 +5,6 @@ import { db } from '../../../drizzle/db';
 import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '../../../drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { DashboardEmail } from '../../components/emails/DashboardEmail';
-import React from 'react';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const fromEmail = process.env.FROM_EMAIL;

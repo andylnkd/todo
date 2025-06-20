@@ -1,5 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { Camera, Wand2, CheckCircle, Loader2, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import Image from 'next/image';
 
 const ImageUploadDialog: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -40,7 +43,9 @@ const ImageUploadDialog: React.FC = () => {
       const data = await res.json();
       setExtractedItems(data.items || []);
     } catch (err) {
-      setError('Failed to extract action items. Please try again.');
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error('Extraction failed:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -63,7 +68,9 @@ const ImageUploadDialog: React.FC = () => {
       setError(null);
       setCategoryName('Extracted from Image');
     } catch (err) {
-      setError('Failed to save action items. Please try again.');
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error('Failed to save items to the database:', error);
+      setError(error.message);
     } finally {
       setSaving(false);
     }
@@ -105,7 +112,17 @@ const ImageUploadDialog: React.FC = () => {
       {file && !extractedItems && (
         <div className="flex flex-col items-center gap-2">
           {previewUrl && (
-            <img src={previewUrl} alt="Preview" className="h-24 w-24 object-cover rounded border" />
+            <div className="mt-4 p-4 border rounded-lg max-h-60 overflow-y-auto">
+              <div className="mb-4">
+                <Image 
+                  src={previewUrl} 
+                  alt="Selected preview" 
+                  className="max-w-full h-auto rounded-md"
+                  width={500}
+                  height={300}
+                />
+              </div>
+            </div>
           )}
           <button
             onClick={handleExtract}

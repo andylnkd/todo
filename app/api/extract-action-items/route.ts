@@ -20,9 +20,22 @@ IMPORTANT: Your response MUST be a valid JSON array with NO markdown formatting 
 If no action items found, return []
 `;
 
+interface RequestBody {
+    transcript: string;
+    userId: string;
+    itemType?: 'regular' | 'daily';
+}
+
+// Gemini Stream Function
+async function* streamGoogleGemini(
+  prompt: string
+): AsyncGenerator<string, void, unknown> {
+  // ... existing code ...
+}
+
 export async function POST(req: NextRequest) {
   const requestId = genRequestId();
-  const log = (...args: any[]) => console.log(`[extract-action-items][${requestId}]`, ...args);
+  const log = (...args: (string | number | object)[]) => console.log(`[extract-action-items][${requestId}]`, ...args);
 
   if (!process.env.GEMINI_API_KEY) {
     log('GEMINI_API_KEY not configured.');
@@ -52,7 +65,7 @@ export async function POST(req: NextRequest) {
       file: imageBlob,
       config: { mimeType: imageBlob.type },
     });
-    log('Image uploaded to Gemini. URI:', uploaded.uri);
+    log('Image uploaded to Gemini. URI:', uploaded.uri || '');
 
     // Build the prompt
     const contents = createUserContent([
@@ -67,13 +80,13 @@ export async function POST(req: NextRequest) {
     });
     const text = response.text;
     if (!text) {
-      log('Gemini response missing text field:', response);
+      log('Gemini response missing text field:', JSON.stringify(response));
       return NextResponse.json({ error: 'Gemini response missing text field', requestId }, { status: 500 });
     }
     log('Gemini raw response (truncated):', text.slice(0, 500));
     // Try to parse as JSON array
     let items: string[] = [];
-    let parseError: any = null;
+    let parseError: Error | null = null;
     try {
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -81,25 +94,26 @@ export async function POST(req: NextRequest) {
       } else {
         items = JSON.parse(text);
       }
-      log('Parsed items array:', items);
+      log('Parsed items array:', JSON.stringify(items));
       log('Parsed items count:', items.length);
     } catch (err) {
-      parseError = err;
-      log('Failed to parse AI response:', err, '\nRaw:', text);
+      parseError = err instanceof Error ? err : new Error(String(err));
+      log('Failed to parse AI response:', String(err), '\nRaw:', text);
       if (DEBUG) {
-        return NextResponse.json({ error: 'Failed to parse AI response', requestId, raw: text, parseError: parseError instanceof Error ? parseError.message : String(parseError) }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to parse AI response', requestId, raw: text, parseError: parseError.message }, { status: 500 });
       } else {
         return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 });
       }
     }
     // Only return the extracted items, do not save to DB
     return NextResponse.json({ items, requestId });
-  } catch (err: any) {
-    log('Gemini extraction error:', err && err.stack ? err.stack : err);
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    log('Gemini extraction error:', error.stack ? error.stack : error);
     if (DEBUG) {
-      return NextResponse.json({ error: 'Failed to extract action items', requestId, details: err instanceof Error ? err.message : String(err) }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to extract action items', requestId, details: error.message }, { status: 500 });
     } else {
-      return NextResponse.json({ error: 'Failed to extract action items' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to extract action items' }, { status:500 });
     }
   }
 } 

@@ -44,40 +44,47 @@ export async function GET(req: NextRequest) {
             )
         );
 
-        // Process results to create a hierarchical structure
-        const processedResults = results.reduce((acc: any, row) => {
-            if (!acc[row.categoryId]) {
-                acc[row.categoryId] = {
-                    id: row.categoryId,
+        // Process the flat results into a nested structure
+        const categoriesMap = results.reduce((acc: Map<string, any>, row) => {
+            if (!row.categoryId) return acc;
+            
+            const categoryId = row.categoryId;
+            if (!acc.has(categoryId)) {
+                acc.set(categoryId, {
+                    id: categoryId,
                     name: row.categoryName,
-                    items: {}
-                };
+                    items: new Map()
+                });
             }
             
-            if (row.actionItemId && !acc[row.categoryId].items[row.actionItemId]) {
-                acc[row.categoryId].items[row.actionItemId] = {
+            const category = acc.get(categoryId);
+
+            if (row.actionItemId && !category.items.has(row.actionItemId)) {
+                category.items.set(row.actionItemId, {
                     actionItemId: row.actionItemId,
                     actionItem: row.actionItemText,
                     dueDate: row.dueDate,
                     nextSteps: []
-                };
-            }
-
-            if (row.nextStepId && row.actionItemId) {
-                acc[row.categoryId].items[row.actionItemId].nextSteps.push({
-                    id: row.nextStepId,
-                    text: row.nextStepText,
-                    completed: row.nextStepCompleted
                 });
             }
 
-            return acc;
-        }, {});
+            if (row.nextStepId && row.actionItemId) {
+                const nextStep = {
+                    id: row.nextStepId,
+                    text: row.nextStepText,
+                    completed: row.nextStepCompleted,
+                    dueDate: row.dueDate ? new Date(row.dueDate) : null
+                };
+                category.items.get(row.actionItemId).nextSteps.push(nextStep);
+            }
 
-        // Convert to array format matching our frontend structure
-        const finalResults = Object.values(processedResults).map((category: any) => ({
+            return acc;
+        }, new Map());
+
+        // Convert map to array
+        const finalResults = Array.from(categoriesMap.values()).map(category => ({
             ...category,
-            items: Object.values(category.items)
+            items: Array.from(category.items.values())
         }));
 
         console.log('Final results:', JSON.stringify(finalResults, null, 2));

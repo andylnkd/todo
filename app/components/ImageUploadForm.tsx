@@ -30,8 +30,9 @@ export default function ImageUploadForm({ onImageUploaded, onClose }: ImageUploa
       await onImageUploaded(selectedFile);
       toast({ title: "Image uploaded successfully!" });
       onClose();
-    } catch (error) {
-      toast({ title: "Error uploading image", variant: "destructive" });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      toast({ title: "Error uploading image", variant: "destructive", description: error.message });
     }
   };
 

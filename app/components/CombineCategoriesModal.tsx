@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -33,7 +34,10 @@ export function CombineCategoriesModal({
   onClose,
   onSuccess 
 }: CombineCategoriesModalProps) {
+  const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [targetCategory, setTargetCategory] = useState<string>('');
+  const [newCategoryName, setNewCategoryName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -57,13 +61,16 @@ export function CombineCategoriesModal({
 
       if (!response.ok) throw new Error('Failed to combine categories');
 
+      const result = await response.json();
+      router.refresh();
+      onClose();
       toast({
         title: 'Success',
-        description: 'Categories combined successfully'
+        description: `Successfully merged into "${result.category.name}".`
       });
-      onSuccess();
-      onClose();
-    } catch (error) {
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error('Failed to merge categories:', error);
       toast({
         title: 'Error',
         description: 'Failed to combine categories',

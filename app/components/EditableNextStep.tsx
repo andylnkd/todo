@@ -102,6 +102,34 @@ export default function EditableNextStep({
     setIsEditing(false);
   };
 
+  const handleSave = async (newText: string, newCompleted: boolean, newDueDate: Date | null) => {
+    setIsEditing(false);
+    try {
+      await onSave(id, newText, newCompleted, newDueDate);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error("Failed to save next step:", error);
+      // Optionally show a toast to the user
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      if (onDelete) {
+        await onDelete(id);
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error("Failed to delete next step:", error);
+      // Optionally show a toast to the user
+    }
+  };
+
+  const handleDueDateChange = (date: Date | null) => {
+    setDueDate(date);
+    handleSave(editedText, isChecked, date);
+  };
+
   if (isEditing) {
     return (
       <div className="flex items-center gap-2 pl-8">
@@ -216,7 +244,7 @@ export default function EditableNextStep({
             variant="ghost"
             size="icon"
             className="h-6 w-6 text-destructive"
-            onClick={() => onDelete(id)}
+            onClick={handleDelete}
             type="button"
           >
             <Trash2 className="h-3 w-3" />

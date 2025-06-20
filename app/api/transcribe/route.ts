@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { auth } from '@clerk/nextjs/server';
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+if (!OPENAI_API_KEY) {
+    console.error('OpenAI API key is not set.');
+}
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+    apiKey: OPENAI_API_KEY!,
 });
 
 // Add CORS headers helper function
@@ -20,59 +25,31 @@ export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders() });
 }
 
-export async function POST(request: NextRequest) {
-  // For development, you might want to bypass auth temporarily
-  // const { userId } = await auth();
-  // if (!userId) {
-  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // }
-
-  try {
-    const formData = await request.formData();
-    const audioFile = formData.get('audio');
-
-    if (!audioFile || !(audioFile instanceof Blob)) {
-      return NextResponse.json(
-        { error: 'No valid audio file provided under the key "audio"' },
-        { status: 400, headers: corsHeaders() }
-      );
+export async function POST(req: NextRequest) {
+    if (!OPENAI_API_KEY) {
+        return NextResponse.json({ error: 'OpenAI API key not configured.' }, { status: 500 });
     }
 
-    console.log('Received audio file:', {
-        name: audioFile instanceof File ? audioFile.name : 'N/A',
-        size: audioFile.size,
-        type: audioFile.type
-    });
+    try {
+        const formData = await req.formData();
+        const file = formData.get('file');
 
-    const file = new File([audioFile], 'audio.webm', { type: audioFile.type });
+        if (!file || typeof file === 'string') {
+            return NextResponse.json({ error: 'No file uploaded.' }, { status: 400 });
+        }
+        
+        // The OpenAI SDK can handle the file directly
+        const response = await openai.audio.transcriptions.create({
+            file: file,
+            model: 'whisper-1',
+        });
 
-    const response = await openai.audio.transcriptions.create({
-      file: file,
-      model: 'whisper-1',
-      response_format: "json"
-    });
-
-    const transcript = response.text;
-    console.log('Transcript:', transcript);
-
-    return NextResponse.json({ text: transcript }, { headers: corsHeaders() });
-
-  } catch (error: any) {
-    console.error('Transcription API Error:', error);
-    if (error.response) {
-      console.error('Error Response Data:', error.response.data);
-      console.error('Error Response Status:', error.response.status);
-      console.error('Error Response Headers:', error.response.headers);
-    } else if (error.request) {
-      console.error('Error Request Data:', error.request);
-    } else {
-      console.error('Error Message:', error.message);
+        return NextResponse.json({ transcript: response.text }, { headers: corsHeaders() });
+    } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        console.error('Error in transcription:', error);
+        return NextResponse.json({ error: 'Transcription failed.', details: error.message }, { status: 500, headers: corsHeaders() });
     }
-    return NextResponse.json(
-      { error: 'Failed to transcribe audio', details: error.message || 'Unknown error' },
-      { status: 500, headers: corsHeaders() }
-    );
-  }
 }
 
 // // Keep this config, it's necessary for FormData

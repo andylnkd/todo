@@ -33,7 +33,9 @@ export default function EditableTextItem({ id, initialText, itemTypeLabel, onSav
         description: `${itemTypeLabel} has been updated.`
       });
       setIsEditing(false);
-    } catch (error) {
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error(`Failed to save ${itemTypeLabel}:`, error);
       toast({
         title: 'Update failed',
         description: `Failed to update ${itemTypeLabel}. Please try again.`,
