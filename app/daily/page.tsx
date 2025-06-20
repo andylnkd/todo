@@ -6,12 +6,13 @@ import * as schema from '../../drizzle/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import AudioRecorderWrapper from '../components/AudioRecorderWrapper';
 import { revalidatePath } from 'next/cache';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InputHub from '../components/InputHub';
 
 // Helper to get start and end of today
 function getTodayTimestamps() {
@@ -20,6 +21,37 @@ function getTodayTimestamps() {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   return { start, end };
+}
+
+async function addCategoryForDaily(name: string): Promise<string | null> {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  try {
+    const [inserted] = await db.insert(schema.categories)
+      .values({ name, userId })
+      .returning({ id: schema.categories.id });
+    revalidatePath('/daily');
+    return inserted.id;
+  } catch (error) {
+    console.error("Failed to add category:", error);
+    return null;
+  }
+}
+
+async function addActionItemForDaily(categoryId: string, text: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  await db.insert(schema.actionItems).values({ categoryId, actionItem: text, userId, type: 'daily' });
+  revalidatePath('/daily');
+}
+
+async function handleImageUploadedForDaily(file: File) {
+  'use server';
+  console.log('Received image on daily page:', file.name, file.size);
+  // TODO: Implement image processing for daily items
+  revalidatePath('/daily');
 }
 
 export default async function DailyPage() {
@@ -47,6 +79,11 @@ export default async function DailyPage() {
       )
     )
     .orderBy(schema.actionItems.createdAt);
+
+  // Fetch categories for the InputHub dropdown
+  const allCategories = await db.query.categories.findMany({
+    where: eq(schema.categories.userId, userId)
+  });
 
   async function handleDailyTranscriptProcessed(transcript: string) {
     'use server';
@@ -104,7 +141,13 @@ export default async function DailyPage() {
 
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-2xl mx-auto space-y-8">
-          <AudioRecorderWrapper onTranscriptProcessed={handleDailyTranscriptProcessed} />
+          <InputHub
+            categories={allCategories}
+            onTranscriptProcessed={handleDailyTranscriptProcessed}
+            onAddCategory={addCategoryForDaily}
+            onAddActionItem={addActionItemForDaily}
+            onImageUploaded={handleImageUploadedForDaily}
+          />
           
           <div className="space-y-6 pt-4">
             <h2 className="text-xl font-semibold text-gray-700">Today's Entries ({dailyItems.length})</h2>

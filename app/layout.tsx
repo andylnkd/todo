@@ -4,8 +4,8 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: "Voice Notes - AI Task Manager",
-  description: "Convert voice notes into actionable tasks",
+  title: "Innatus",
+  description: "Your intelligent task manager",
 };
 
 export default function RootLayout({

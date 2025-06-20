@@ -25,6 +25,7 @@ import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButto
 import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 import ImageUploadDialog from '../components/ImageUploadDialogClientWrapper';
 import AddNewItemsCard from '../components/AddNewItemsCard';
+import InputHub from '../components/InputHub'; // Import the new InputHub
 
 // Define the expected data structure for the table
 interface NextStepDetail {
@@ -185,7 +186,7 @@ async function deleteActionItem(id: string) {
   }
 }
 
-async function addCategory(name: string): Promise<string> {
+async function addCategory(name: string): Promise<string | null> { // Ensure return type matches what QuickAddForm expects
   'use server';
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
@@ -198,7 +199,8 @@ async function addCategory(name: string): Promise<string> {
     return inserted.id;
   } catch (error) {
     console.error("Failed to add category:", error);
-    throw new Error("Failed to add category.");
+    // Return null or throw, depending on desired error handling in the component
+    return null;
   }
 }
 
@@ -247,14 +249,21 @@ async function handleDashboardTranscriptProcessed(transcript: string) {
     await processTranscriptAndSave({
       transcript,
       userId,
-      itemType: 'regular', // Explicitly set to regular, or omit to rely on default
+      itemType: 'regular',
     });
-    revalidatePath('/dashboard'); 
+    revalidatePath('/dashboard');
   } catch (error) {
-    console.error("Error processing dashboard transcript in server action:", error);
-    // Handle error as appropriate for the dashboard page
-    throw error; 
+    console.error("Dashboard transcript processing error:", error);
+    // Optionally, return an error message to be displayed
   }
+}
+
+async function handleImageUploaded(file: File) {
+  'use server';
+  // Placeholder logic for image handling
+  console.log('Received image on server:', file.name, file.size);
+  // TODO: Implement image processing and saving logic (e.g., save to blob storage, process with AI)
+  revalidatePath('/dashboard');
 }
 
 // --- End Server Actions ---
@@ -266,6 +275,11 @@ export default async function Dashboard() {
   if (!userId) {
     redirect('/sign-in'); // Redirect if not logged in
   }
+
+  // Fetch all categories once for the dropdown and emoji mapping
+  const allCategories = await db.query.categories.findMany({
+    where: eq(categoriesTable.userId, userId)
+  });
 
   // Fetch categories with items and next steps
   const categories = await db
@@ -335,44 +349,37 @@ export default async function Dashboard() {
   categories.sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-6">
-              <h1 className="text-2xl font-bold">Action Items Dashboard</h1>
-              <Link href="/daily" className="text-lg font-medium text-foreground hover:text-primary transition-colors">
-                Daily
-              </Link>
+    <SelectedItemsProvider>
+      <div className="min-h-screen">
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex h-16 items-center justify-between">
+            <Link href="/dashboard" className="text-xl font-bold">Innatus</Link>
+            <div className="flex items-center gap-4">
+              <Link href="/daily"><Button variant="outline">Daily Dump</Button></Link>
+              <UserButton afterSignOutUrl="/" />
             </div>
-            <UserButton />
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Add New Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AddNewItemsCard onTranscriptProcessed={handleDashboardTranscriptProcessed} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <SelectedItemsProvider>
+        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="space-y-8">
+            <InputHub
+              categories={allCategories}
+              onTranscriptProcessed={handleDashboardTranscriptProcessed}
+              onAddCategory={addCategory}
+              onAddActionItem={addActionItem}
+              onImageUploaded={handleImageUploaded}
+            />
+            
+            <Card>
               <CardHeader>
-                <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between">
-                  <CardTitle>Action Items</CardTitle>
-                  <div className="flex flex-wrap gap-2">
-                    <CombineCategoriesButton categories={categories} />
-                    <RefineListWrapper categories={categories} />
-                    <SendWhatsAppButton categories={categories} />
-                    <CopyMarkdownButton categories={categories} />
-                    <SendDashboardButton />
-                  </div>
+                <CardTitle>Action Items</CardTitle>
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <CombineCategoriesButton categories={categories} />
+                  <RefineListWrapper categories={categories} />
+                  <SendWhatsAppButton categories={categories} />
+                  <CopyMarkdownButton categories={categories} />
+                  <SendDashboardButton />
                 </div>
               </CardHeader>
               <CardContent>
@@ -390,10 +397,10 @@ export default async function Dashboard() {
                   onDeleteCategory={deleteCategory}
                 />
               </CardContent>
-            </SelectedItemsProvider>
-          </Card>
-        </div>
-      </main>
-    </div>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </SelectedItemsProvider>
   );
 } 

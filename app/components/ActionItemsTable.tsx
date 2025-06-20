@@ -29,6 +29,7 @@ import AudioRecorderWrapper from './AudioRecorderWrapper';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import PomodoroTimer from './PomodoroTimer';
+import { getEmojiForCategory } from '@/lib/utils'; // Import the function
 
 // Move the ActionItemWithNextSteps type definition here for use in ActionItemRow
 interface NextStepDetail {
@@ -49,7 +50,8 @@ interface ActionItemWithNextSteps {
 interface Category {
   id: string;
   name: string;
-  items: ActionItemWithNextSteps[]; // Use the updated action item structure
+  status: string;  // Add status field
+  items: ActionItemWithNextSteps[];
 }
 
 // Define the props for the table component
@@ -63,22 +65,11 @@ interface ActionItemsTableProps {
   onDeleteNextStep: (id: string) => Promise<void>;
   onAddActionItem: (categoryId: string, text: string) => Promise<void>;
   onDeleteActionItem: (id: string) => Promise<void>;
-  onAddCategory: (name: string) => Promise<string>;
+  onAddCategory: (name: string) => Promise<string | null>;
   onDeleteCategory: (id: string) => Promise<void>;
 }
 
 type SortOption = 'dueDate' | 'name' | 'recent';
-
-// Emoji mapping function
-function getEmojiForCategory(name: string): string {
-  const lower = name.toLowerCase();
-  if (/(google|roadmap|work|GLVM|office|job|project)/.test(lower)) return '💼';
-  if (/startup|business|company|entrepreneur|founder|investor|vc|venture|angel|fund|seed|seriesd/.test(lower)) return '🚀';
-  if (/(personal|home|family)/.test(lower)) return '🏠';
-  if (/(sport|game|fitness|exercise)/.test(lower)) return '🏅';
-  if (/(health|doctor|wellness|medicine)/.test(lower)) return '🩺';
-  return '👨';
-}
 
 // Add this new child component above the main ActionItemsTable component
 interface ActionItemRowProps {
@@ -119,7 +110,7 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
       "space-y-2 p-3 rounded-lg border transition-colors",
       isSelected && "bg-secondary/30 border-secondary"
     )}>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex items-center">
@@ -153,12 +144,14 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
             <p>Enhance with Audio</p>
           </TooltipContent>
         </Tooltip>
-        <EditableTextItem
-          id={item.actionItemId}
-          initialText={item.actionItem}
-          onSave={onSaveActionItem}
-          itemTypeLabel="Action Item"
-        />
+        <div className="flex-1 min-w-[150px]">
+          <EditableTextItem
+            id={item.actionItemId}
+            initialText={item.actionItem}
+            onSave={onSaveActionItem}
+            itemTypeLabel="Action Item"
+          />
+        </div>
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="sm" disabled={isSavingDueDate}>
@@ -591,11 +584,58 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     }
   };
 
+  // Fix the useMemo hooks to properly check category status
+  const completedCategories = useMemo(() =>
+    sortedCategories.filter(cat => 
+      cat.status === 'completed' || 
+      (cat.items.length > 0 && cat.items.every(item => 
+        item.nextSteps.length > 0 && item.nextSteps.every(step => step.completed)
+      ))
+    ),
+    [sortedCategories]
+  );
+
+  const activeCategories = useMemo(() =>
+    sortedCategories.filter(cat => 
+      cat.status !== 'completed' && 
+      (!cat.items.length || cat.items.some(item => 
+        !item.nextSteps.length || item.nextSteps.some(step => !step.completed)
+      ))
+    ),
+    [sortedCategories]
+  );
+
+  // Add this function to handle category completion
+  const handleCategoryComplete = async (categoryId: string, completed: boolean) => {
+    try {
+      const response = await fetch('/api/categories/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ categoryId, completed }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update category completion status');
+      }
+
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to update category completion:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update category completion status.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Quick Add Controls at the Top */}
       <div className="flex flex-col sm:flex-row gap-2 items-center justify-between pb-2 border-b">
-        <div className="flex gap-2 items-center w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
           <Button
             onClick={handleQuickAdd}
             disabled={selectedCategoryId === '__new__' ? !(quickInputText && quickActionItemText) : !quickInputText}
@@ -650,15 +690,17 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
           )}
         </div>
         {/* Existing controls: Search, Sort, etc. */}
-        <div className="flex gap-2 items-center w-full sm:w-auto mt-2 sm:mt-0">
-          <Input
-            type="text"
-            placeholder="Search items..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="pl-10 pr-8"
-          />
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto mt-2 sm:mt-0">
+          <div className="relative">
+            <Input
+              type="text"
+              placeholder="Search items..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-10 pr-8"
+            />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          </div>
           {searchQuery && (
             <Button
               variant="ghost"
@@ -811,54 +853,136 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         </div>
       )}
 
+      {/* Active Categories Section */}
+      <h2 className="text-xl font-bold mt-6 mb-2">In Progress</h2>
       <TooltipProvider>
         <Accordion type="multiple" className="w-full space-y-4">
-          {sortedCategories.map((category) => {
+          {activeCategories.length === 0 && (
+            <div className="text-muted-foreground px-4 py-8">No active categories.</div>
+          )}
+          {activeCategories.map((category) => {
             const emoji = categoryEmojis[category.id];
             return (
               <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center px-4 py-2">
                   <Checkbox
-                    checked={selectedCategories.includes(category.id)}
-                    onCheckedChange={() => handleCategorySelect(category.id)}
-                    className="mt-4"
+                    checked={category.status === 'completed'}
+                    onCheckedChange={(checked: boolean) => handleCategoryComplete(category.id, checked)}
+                    className="mr-2"
                   />
-                  <AccordionTrigger className="flex-1 hover:no-underline">
-                    <div className="flex items-center gap-2">
-                      <span>{emoji} {category.name}</span>
-                      {getEarliestDueDate(category) && (
-                        <span className="text-sm text-muted-foreground">
-                          Due: {format(getEarliestDueDate(category)!, 'MMM d')}
-                        </span>
-                      )}
-                    </div>
+                  <AccordionTrigger className="flex-1 flex items-center text-left">
+                    <span>{emoji}</span>
+                    <span className="font-medium ml-2">{category.name}</span>
                   </AccordionTrigger>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-primary"
-                        onClick={() => {
-                          setEnhanceTarget({ id: category.id, type: 'category' });
-                          setEnhanceModalOpen(true);
-                        }}
-                      >
-                        <Mic className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Enhance Category with Audio</p>
-                    </TooltipContent>
-                  </Tooltip>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive"
-                    onClick={() => handleDeleteCategory(category.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2 ml-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-primary"
+                          onClick={() => {
+                            setEnhanceTarget({ id: category.id, type: 'category' });
+                            setEnhanceModalOpen(true);
+                          }}
+                        >
+                          <Mic className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Enhance Category with Audio</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => handleDeleteCategory(category.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <AccordionContent className="px-4 pb-4">
+                  <div className="mb-4">
+                    <EditableTextItem
+                      id={category.id}
+                      initialText={category.name}
+                      onSave={handleSaveCategory}
+                      itemTypeLabel="Category"
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    {category.items.map((item) => (
+                      <ActionItemRow
+                        key={item.actionItemId}
+                        item={item}
+                        isSelected={isSelected(item.actionItemId)}
+                        onSaveActionItem={handleSaveActionItem}
+                        toggleItem={toggleItem}
+                        handleDeleteActionItem={handleDeleteActionItem}
+                        setEnhanceTarget={setEnhanceTarget}
+                        setEnhanceModalOpen={setEnhanceModalOpen}
+                        handleSaveNextStep={handleSaveNextStep}
+                        handleDeleteNextStep={handleDeleteNextStep}
+                      />
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      </TooltipProvider>
+      {/* Completed Categories Section */}
+      <h2 className="text-xl font-bold mt-10 mb-2">Completed</h2>
+      <TooltipProvider>
+        <Accordion type="multiple" className="w-full space-y-4">
+          {completedCategories.length === 0 && (
+            <div className="text-muted-foreground px-4 py-8">No completed categories yet.</div>
+          )}
+          {completedCategories.map((category) => {
+            const emoji = categoryEmojis[category.id];
+            return (
+              <AccordionItem key={category.id} value={category.id} className="border rounded-lg opacity-60">
+                <div className="flex items-center px-4 py-2">
+                  <Checkbox
+                    checked={category.status === 'completed'}
+                    onCheckedChange={(checked: boolean) => handleCategoryComplete(category.id, checked)}
+                    className="mr-2"
+                  />
+                  <AccordionTrigger className="flex-1 flex items-center text-left">
+                    <span>{emoji}</span>
+                    <span className="font-medium ml-2">{category.name}</span>
+                  </AccordionTrigger>
+                  <div className="flex items-center gap-2 ml-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-primary"
+                          onClick={() => {
+                            setEnhanceTarget({ id: category.id, type: 'category' });
+                            setEnhanceModalOpen(true);
+                          }}
+                        >
+                          <Mic className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Enhance Category with Audio</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => handleDeleteCategory(category.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <AccordionContent className="px-4 pb-4">
                   <div className="mb-4">
