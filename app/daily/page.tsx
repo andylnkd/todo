@@ -46,8 +46,12 @@ async function addActionItemForDaily(categoryId: string, text: string) {
   revalidatePath('/daily');
 }
 
-async function handleImageUploadedForDaily(file: File) {
+async function handleImageUploadedForDaily(formData: FormData) {
   'use server';
+  const file = formData.get('file') as File;
+  if (!file) {
+    throw new Error('No file uploaded.');
+  }
   console.log('Received image on daily page:', file.name, file.size);
   // TODO: Implement image processing for daily items
   revalidatePath('/daily');
