@@ -3,7 +3,6 @@
 import { RefineListButton } from "./RefineListButton";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
 
 interface Category {
   id: string;
@@ -15,6 +14,14 @@ interface Category {
   }[];
 }
 
+interface RefinedStructure {
+    name: string;
+    items: {
+        actionItem: string;
+        nextSteps: string[];
+    }[];
+}
+
 interface RefineListWrapperProps {
   categories: Category[];
 }
@@ -23,7 +30,7 @@ export default function RefineListWrapper({ categories }: RefineListWrapperProps
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleApplyRefinements = async (refinedStructure: any) => {
+  const handleApplyRefinements = async (refinedStructure: RefinedStructure[]) => {
     try {
       const response = await fetch('/api/refine-list', {
         method: 'PUT',

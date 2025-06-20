@@ -45,7 +45,7 @@ export default function EditableNextStep({
       toast({
         title: checked ? 'Next step completed' : 'Next step marked active',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Update failed',
         description: `Failed to update next step status. Please try again.`,
@@ -69,7 +69,7 @@ export default function EditableNextStep({
         title: 'Next step updated successfully',
       });
       setIsEditing(false);
-    } catch (error) {
+    } catch {
       toast({
         title: 'Update failed',
         description: `Failed to update next step text. Please try again.`,
@@ -87,7 +87,7 @@ export default function EditableNextStep({
       toast({
         title: date ? 'Due date updated' : 'Due date removed',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Update failed',
         description: `Failed to update due date. Please try again.`,
@@ -102,17 +102,6 @@ export default function EditableNextStep({
     setIsEditing(false);
   };
 
-  const handleSave = async (newText: string, newCompleted: boolean, newDueDate: Date | null) => {
-    setIsEditing(false);
-    try {
-      await onSave(id, newText, newCompleted, newDueDate);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      console.error("Failed to save next step:", error);
-      // Optionally show a toast to the user
-    }
-  };
-
   const handleDelete = async () => {
     try {
       if (onDelete) {
@@ -123,11 +112,6 @@ export default function EditableNextStep({
       console.error("Failed to delete next step:", error);
       // Optionally show a toast to the user
     }
-  };
-
-  const handleDueDateChange = (date: Date | null) => {
-    setDueDate(date);
-    handleSave(editedText, isChecked, date);
   };
 
   if (isEditing) {

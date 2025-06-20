@@ -89,13 +89,14 @@ export async function processTranscriptAndSave({
   let aiResponseText = response.text();
 
   // 3. Parse and Validate AI Response
-  let parsedData: ParsedTranscriptResponse;
-  aiResponseText = aiResponseText.replace(/```json\n?|\n?```/g, '').trim();
-  const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    aiResponseText = jsonMatch[0];
-  }
-  parsedData = JSON.parse(aiResponseText);
+  const parsedData: ParsedTranscriptResponse = (() => {
+    aiResponseText = aiResponseText.replace(/```json\n?|\n?```/g, '').trim();
+    const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      aiResponseText = jsonMatch[0];
+    }
+    return JSON.parse(aiResponseText);
+  })();
   if (!parsedData.categories || !Array.isArray(parsedData.categories)) {
     throw new Error('Invalid response from AI: missing or invalid categories array');
   }
@@ -111,7 +112,14 @@ export async function processTranscriptAndSave({
       if (!categoryId) throw new Error(`Failed to insert category: ${category.name}`);
 
       for (const item of category.items) {
-        const valuesToInsert: any = {
+        const valuesToInsert: {
+          categoryId: string;
+          actionItem: string;
+          userId: string;
+          transcriptionId: string;
+          status: string;
+          type?: string;
+        } = {
           categoryId: categoryId,
           actionItem: item.actionItem,
           userId: userId,
@@ -307,8 +315,7 @@ export async function processExtractedItemsAndSave({
   if (!items || !Array.isArray(items) || items.length === 0) {
     throw new Error('No items to save');
   }
-  let createdCategory: { id: string; name: string } | undefined;
-  let createdItems: { id: string; actionItem: string }[] = [];
+
   await db.transaction(async (tx) => {
     // Create category
     const [category] = await tx.insert(schema.categories).values({
@@ -316,18 +323,20 @@ export async function processExtractedItemsAndSave({
       userId,
     }).returning({ id: schema.categories.id, name: schema.categories.name });
     if (!category) throw new Error('Failed to create category');
-    createdCategory = category;
+
     // Insert action items
-    for (const item of items) {
-      const [actionItem] = await tx.insert(schema.actionItems).values({
-        categoryId: category.id,
-        actionItem: item,
-        userId,
-        status: 'pending',
-        type: 'regular',
-      }).returning({ id: schema.actionItems.id, actionItem: schema.actionItems.actionItem });
-      if (actionItem) createdItems.push(actionItem);
-    }
+    await Promise.all(
+      items.map(itemText => 
+        tx.insert(schema.actionItems).values({
+          categoryId: category.id,
+          actionItem: itemText,
+          userId,
+          status: 'pending',
+          type: 'regular',
+        }).returning()
+      )
+    );
   });
-  return { category: createdCategory, items: createdItems };
+
+  return { success: true };
 } 

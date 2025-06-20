@@ -32,12 +32,10 @@ export function CombineCategoriesModal({
   categories,
   isOpen,
   onClose,
-  onSuccess 
+  onSuccess,
 }: CombineCategoriesModalProps) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [targetCategory, setTargetCategory] = useState<string>('');
-  const [newCategoryName, setNewCategoryName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -63,7 +61,7 @@ export function CombineCategoriesModal({
 
       const result = await response.json();
       router.refresh();
-      onClose();
+      onSuccess();
       toast({
         title: 'Success',
         description: `Successfully merged into "${result.category.name}".`

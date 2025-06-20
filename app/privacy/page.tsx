@@ -6,10 +6,10 @@ export default function PrivacyPolicyPage() {
 
       <h2>1. Introduction</h2>
       <p>
-        Welcome to Innatus ("we," "us," or "our"). We are committed to protecting your personal information and your right to privacy. If you have any questions or concerns about this privacy policy, or our practices with regards to your personal information, please contact us at admin@kollaborate.co.
+        Welcome to Innatus (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). We are committed to protecting your personal information and your right to privacy. If you have any questions or concerns about this privacy policy, or our practices with regards to your personal information, please contact us at admin@kollaborate.co.
       </p>
       <p>
-        This privacy policy applies to all information collected through our website (https://innatus.netlify.app/), and/or any related services, sales, marketing or events (we refer to them collectively in this privacy policy as the "Services").
+        This privacy policy applies to all information collected through our website (https://innatus.netlify.app/), and/or any related services, sales, marketing or events (we refer to them collectively in this privacy policy as the &quot;Services&quot;).
       </p>
       <p>
         Please read this privacy policy carefully as it will help you make informed decisions about sharing your personal information with us.
@@ -77,12 +77,12 @@ export default function PrivacyPolicyPage() {
         If we are relying on your consent to process your personal information, you have the right to withdraw your consent at any time. Please note however that this will not affect the lawfulness of the processing before its withdrawal, nor will it affect the processing of your personal information conducted in reliance on lawful processing grounds other than consent.
       </p>
 
-      <h2>7. Children's Privacy and Child Safety</h2>
+      <h2>7. Children&apos;s Privacy and Child Safety</h2>
       <p>
         Our Services are not intended for use by children under the age of 13 (or a higher age threshold where applicable under local law). We do not knowingly collect personal information from children under 13. If we learn that we have collected personal information from a child under 13 without parental consent, we will take steps to delete that information as soon as possible.
       </p>
       <p>
-        We are committed to child safety online. If you are a parent or guardian and believe that your child has provided us with personal information without your consent, please contact us immediately at [Your Contact Email/Address]. We encourage parents to monitor their children's online activities and to help enforce this Policy by instructing their children never to provide personal information on our Services without their permission.
+        We are committed to child safety online. If you are a parent or guardian and believe that your child has provided us with personal information without your consent, please contact us immediately at [Your Contact Email/Address]. We encourage parents to monitor their children&apos;s online activities and to help enforce this Policy by instructing their children never to provide personal information on our Services without their permission.
       </p>
       <p>
         We also recommend that parents and guardians take advantage of parental control tools available from online services and software manufacturers that help create a child-friendly online environment.
@@ -90,7 +90,7 @@ export default function PrivacyPolicyPage() {
 
       <h2>8. Changes to This Privacy Policy</h2>
       <p>
-        We may update this privacy policy from time to time. The updated version will be indicated by an updated "Effective Date" and the updated version will be effective as soon as it is accessible. If we make material changes to this privacy policy, we may notify you either by prominently posting a notice of such changes or by directly sending you a notification. We encourage you to review this privacy policy frequently to be informed of how we are protecting your information.
+        We may update this privacy policy from time to time. The updated version will be indicated by an updated &quot;Effective Date&quot; and the updated version will be effective as soon as it is accessible. If we make material changes to this privacy policy, we may notify you either by prominently posting a notice of such changes or by directly sending you a notification. We encourage you to review this privacy policy frequently to be informed of how we are protecting your information.
       </p>
 
       <h2>9. Contact Us</h2>

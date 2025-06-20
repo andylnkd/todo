@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../drizzle/db';
 import * as schema from '../../../drizzle/schema';
-import { eq, desc, inArray, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { jsonrepair } from 'jsonrepair';
 
@@ -40,6 +40,16 @@ interface GeminiCategory {
 interface GeminiSuggestions {
     proposedStructure: GeminiCategory[];
     changeSummary: string; // Textual summary of changes
+}
+
+// Structure for the data sent to the prompt
+interface PromptActionItem {
+    actionItem: string;
+    nextSteps: string[];
+}
+interface PromptCategory {
+    name: string;
+    items: PromptActionItem[];
 }
 
 // --- Gemini Initialization ---
@@ -190,7 +200,7 @@ async function fetchAndFormatData(userId: string): Promise<CategoryWithItems[]> 
 }
 
 // Helper to format data specifically for the Gemini prompt (removing IDs, simplifying next steps)
-function formatDataForPrompt(data: CategoryWithItems[]): any[] {
+function formatDataForPrompt(data: CategoryWithItems[]): PromptCategory[] {
     return data.map(category => ({
         name: category.name,
         items: category.items.map(item => ({
@@ -201,37 +211,9 @@ function formatDataForPrompt(data: CategoryWithItems[]): any[] {
     }));
 }
 
-// Helper function to generate a unique request ID for logging
-function genRequestId() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-}
-
-// Define the structure for suggestions from Gemini
-interface GeminiSuggestion {
-  category: string;
-  actionItem: string;
-  nextSteps: string[];
-}
-
-const PROMPT = `
-You are an expert at organizing tasks. Based on the following list of action items and categories, please refine and reorganize them into a more logical structure.
-The user wants a clear, actionable list. You can re-categorize items, merge similar tasks, and suggest new, more concise wording.
-Return the suggestions as a JSON object with a single key "suggestions" which is an array of objects.
-Each object should have "category", "actionItem", and "nextSteps" (an array of strings).
-
-Example:
-{
-  "suggestions": [
-    { "category": "Work", "actionItem": "Finish quarterly report", "nextSteps": ["Analyze sales data", "Create presentation slides"] }
-  ]
-}
-
-Here is the user's list:
-`;
-
 // --- API Route Handler ---
 
-export async function POST(request: NextRequest) {
+export async function POST() {
     // Check if genAI was initialized
     if (!genAI) {
         console.error("GoogleGenerativeAI is not initialized. Check API Key. AI Refine feature unavailable.");
@@ -264,8 +246,7 @@ export async function POST(request: NextRequest) {
      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
      let result, response, text;
      let parsedSuggestions: GeminiSuggestions;
-     let parseError: unknown, jsonMatch;
-     let step = 'first';
+     const step = 'first';
      try {
        result = await model.generateContent(prompt);
        response = await result.response;
@@ -305,66 +286,4 @@ export async function POST(request: NextRequest) {
      console.error('Error refining list:', error.stack || error.message);
      return NextResponse.json({ error: 'Failed to refine list', details: error.message }, { status: 500 });
    }
-}
-
-// This is the new endpoint that the mobile app will call to save the refined list.
-export async function PUT(request: NextRequest) {
-    const { userId } = await auth();
-    if (!userId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    try {
-        const body = await request.json();
-        const { suggestions } = body;
-
-        // Start a transaction
-        await db.transaction(async (tx) => {
-            // Clear existing items for this user
-            // This is a destructive action, be careful.
-            // You might want a different strategy, like marking old items as archived.
-            const actionItemsToDelete = await tx.select({ id: schema.actionItems.id }).from(schema.actionItems).where(eq(schema.actionItems.userId, userId));
-            if (actionItemsToDelete.length > 0) {
-                const ids = actionItemsToDelete.map(i => i.id);
-                await tx.delete(schema.nextSteps).where(inArray(schema.nextSteps.actionItemId, ids));
-                await tx.delete(schema.actionItems).where(eq(schema.actionItems.userId, userId));
-            }
-            await tx.delete(schema.categories).where(eq(schema.categories.userId, userId));
-
-
-            // Insert new items
-            for (const suggestion of suggestions) {
-                // Find or create category
-                let [category] = await tx.select().from(schema.categories).where(and(eq(schema.categories.name, suggestion.category), eq(schema.categories.userId, userId)));
-                if (!category) {
-                    [category] = await tx.insert(schema.categories).values({ name: suggestion.category, userId }).returning();
-                }
-
-                // Insert action item
-                const [actionItem] = await tx.insert(schema.actionItems).values({
-                    categoryId: category.id,
-                    actionItem: suggestion.actionItem,
-                    userId,
-                }).returning();
-
-                // Insert next steps
-                if (suggestion.nextSteps && suggestion.nextSteps.length > 0) {
-                    await tx.insert(schema.nextSteps).values(
-                        suggestion.nextSteps.map((step: string) => ({
-                            actionItemId: actionItem.id,
-                            step,
-                            userId,
-                            completed: false,
-                        }))
-                    );
-                }
-            }
-        });
-
-        return NextResponse.json({ message: 'List refined and saved successfully' });
-    } catch (err: unknown) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        console.error('Error saving refined list:', error.stack || error.message);
-        return NextResponse.json({ error: 'Failed to save refined list', details: error.message }, { status: 500 });
-    }
 } 

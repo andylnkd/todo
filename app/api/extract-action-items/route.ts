@@ -11,7 +11,7 @@ function genRequestId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 }
 
-const PROMPT = `
+const PROMPT_FOR_EXTRACTION = `
 You are a task extraction assistant. Your job is to analyze the given image (which may contain text or diagrams) and:
 1. Extract actionable items
 2. Return ONLY a flat JSON array of action item strings, no categories or next steps
@@ -19,19 +19,6 @@ You are a task extraction assistant. Your job is to analyze the given image (whi
 IMPORTANT: Your response MUST be a valid JSON array with NO markdown formatting or additional text.
 If no action items found, return []
 `;
-
-interface RequestBody {
-    transcript: string;
-    userId: string;
-    itemType?: 'regular' | 'daily';
-}
-
-// Gemini Stream Function
-async function* streamGoogleGemini(
-  prompt: string
-): AsyncGenerator<string, void, unknown> {
-  // ... existing code ...
-}
 
 export async function POST(req: NextRequest) {
   const requestId = genRequestId();
@@ -70,7 +57,7 @@ export async function POST(req: NextRequest) {
     // Build the prompt
     const contents = createUserContent([
       createPartFromUri(uploaded.uri || '', uploaded.mimeType || imageBlob.type),
-      PROMPT,
+      PROMPT_FOR_EXTRACTION,
     ]);
 
     // Call Gemini with the correct model

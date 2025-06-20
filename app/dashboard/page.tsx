@@ -6,16 +6,14 @@ import { auth } from '@clerk/nextjs/server'; // Correct import for server compon
 import { redirect } from 'next/navigation';
 import { db } from '../../drizzle/db'; // Corrected path
 import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '../../drizzle/schema'; // Corrected path
-import { eq, desc, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache'; // Import for revalidation
 import { Button } from '@/components/ui/button';
-import { Combine } from 'lucide-react';
 import Link from 'next/link';
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import AudioRecorderWrapper from '../components/AudioRecorderWrapper'; // We will create this component
 import SendDashboardButton from '../components/SendDashboardButton'; // Use relative path
 import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the new button
 import RefineListWrapper from '../components/RefineListWrapper'; // Add this import
@@ -23,29 +21,7 @@ import SendWhatsAppButton from '../components/SendWhatsAppButton';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
 import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
-import ImageUploadDialog from '../components/ImageUploadDialogClientWrapper';
-import AddNewItemsCard from '../components/AddNewItemsCard';
 import InputHub from '../components/InputHub'; // Import the new InputHub
-
-// Define the expected data structure for the table
-interface NextStepDetail {
-  id: string;
-  text: string;
-  completed: boolean;
-  dueDate?: Date | null;
-}
-
-interface ActionItemWithNextSteps {
-  actionItemId: string;
-  actionItem: string;
-  nextSteps: NextStepDetail[];
-}
-
-interface CategoryWithItems {
-  id: string;
-  name: string;
-  items: ActionItemWithNextSteps[];
-}
 
 // --- Server Actions for Saving ---
 async function saveCategoryName(id: string, newName: string) {
@@ -70,7 +46,7 @@ async function saveActionItemText(id: string, newText: string, newDueDate?: Date
   if (!userId) throw new Error('Unauthorized');
 
   try {
-    const updateData: any = { actionItem: newText, updatedAt: new Date() };
+    const updateData: { actionItem: string; updatedAt: Date; dueDate?: Date | null } = { actionItem: newText, updatedAt: new Date() };
     if (newDueDate !== undefined) {
       updateData.dueDate = newDueDate;
     }
@@ -82,58 +58,6 @@ async function saveActionItemText(id: string, newText: string, newDueDate?: Date
   } catch (error) {
     console.error("Failed to save action item:", error);
     throw new Error("Failed to update action item text.");
-  }
-}
-
-async function saveNextStepText(id: string, newText: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    await db.update(nextStepsTable)
-      .set({ step: newText, updatedAt: new Date() })
-      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId)));
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to save next step:", error);
-    throw new Error("Failed to update next step text.");
-  }
-}
-
-async function toggleNextStepCompleted(id: string, completed: boolean) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    await db.update(nextStepsTable)
-      .set({ completed: completed, updatedAt: new Date() })
-      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId)));
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to toggle next step completed:", error);
-    throw new Error("Failed to toggle next step completed.");
-  }
-}
-
-async function addNextStep(actionItemId: string, text: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    await db.insert(nextStepsTable)
-      .values({
-        actionItemId,
-        step: text,
-        completed: false,
-        userId
-      });
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to add next step:", error);
-    throw new Error("Failed to add next step.");
   }
 }
 
@@ -387,9 +311,6 @@ export default async function Dashboard() {
                   categories={categories}
                   onSaveCategory={saveCategoryName}
                   onSaveActionItem={saveActionItemText}
-                  onSaveNextStep={saveNextStepText}
-                  onToggleNextStepCompleted={toggleNextStepCompleted}
-                  onAddNextStep={addNextStep}
                   onDeleteNextStep={deleteNextStep}
                   onAddActionItem={addActionItem}
                   onDeleteActionItem={deleteActionItem}

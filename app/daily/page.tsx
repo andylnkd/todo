@@ -4,7 +4,6 @@ import { auth } from '@clerk/nextjs/server';
 import { db } from '../../drizzle/db';
 import * as schema from '../../drizzle/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
-import AudioRecorderWrapper from '../components/AudioRecorderWrapper';
 import { revalidatePath } from 'next/cache';
 import { Card, CardContent } from '@/components/ui/card';
 import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions';
@@ -150,7 +149,7 @@ export default async function DailyPage() {
           />
           
           <div className="space-y-6 pt-4">
-            <h2 className="text-xl font-semibold text-gray-700">Today's Entries ({dailyItems.length})</h2>
+            <h2 className="text-xl font-semibold text-gray-700">Today&apos;s Entries ({dailyItems.length})</h2>
             {dailyItems.length > 0 ? (
               <div className="space-y-4">
                 {dailyItems.map((item) => (

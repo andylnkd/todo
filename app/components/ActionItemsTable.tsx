@@ -58,9 +58,6 @@ interface ActionItemsTableProps {
   categories: Category[]; // Expect an array of the updated Category structure
   onSaveCategory: (id: string, newName: string) => Promise<void>;
   onSaveActionItem: (id: string, newText: string, newDueDate?: Date | null) => Promise<void>;
-  onSaveNextStep: (id: string, newText: string) => Promise<void>;
-  onToggleNextStepCompleted: (id: string, completed: boolean) => Promise<void>;
-  onAddNextStep: (actionItemId: string, text: string) => Promise<void>;
   onDeleteNextStep: (id: string) => Promise<void>;
   onAddActionItem: (categoryId: string, text: string) => Promise<void>;
   onDeleteActionItem: (id: string) => Promise<void>;
@@ -217,7 +214,7 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
   );
 }
 
-const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onSaveNextStep, onToggleNextStepCompleted, onAddNextStep, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory }) => {
+const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory }) => {
   const router = useRouter();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -242,8 +239,8 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     try {
       await onSaveCategory(id, newName);
       router.refresh(); // Refresh to show changes
-    } catch (error) {
-      console.error('Failed to update category:', error);
+    } catch (err: unknown) {
+      console.error('Failed to update category:', err);
       toast({
         title: "Error",
         description: "Failed to update category name.",
@@ -348,15 +345,24 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
 
   // Function to handle deleting a category
   const handleDeleteCategory = async (id: string) => {
+    // Confirmation dialog
+    if (!window.confirm("Are you sure you want to delete this category and all its items? This action cannot be undone.")) {
+      return;
+    }
+
     try {
       await onDeleteCategory(id);
-      router.refresh(); // Refresh to show changes
-    } catch (error) {
-      console.error('Failed to delete category:', error);
+      router.refresh();
       toast({
-        title: "Error",
-        description: "Failed to delete category.",
-        variant: "destructive",
+        title: 'Success',
+        description: 'Category and all its items have been deleted.',
+      });
+    } catch (err: unknown) {
+      console.error('Failed to delete category:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete category.',
+        variant: 'destructive',
       });
     }
   };
@@ -372,7 +378,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
           }
           const results = await response.json();
           setSearchResults(results);
-        } catch (error) {
+        } catch {
           toast({
             title: "Search failed",
             description: "Could not perform search. Please try again.",
@@ -480,12 +486,11 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
       setCustomCategoryName('');
       setSelectedItems([]);
       router.refresh();
-    } catch (error) {
-      console.error('Error merging categories:', error);
+    } catch {
       toast({
-        title: 'Error merging categories',
-        description: 'There was a problem merging your categories. Please try again.',
-        variant: 'destructive',
+        title: "Error",
+        description: "An unexpected error occurred while merging categories.",
+        variant: "destructive",
       });
     } finally {
       setIsMerging(false);
@@ -522,8 +527,12 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         setQuickInputText('');
         setQuickActionItemText('');
         router.refresh();
-      } catch (error) {
-        toast({ title: "Error adding item", variant: "destructive" });
+      } catch {
+        toast({
+          title: "Error adding item",
+          description: "An unexpected error occurred.",
+          variant: "destructive",
+        });
       }
     } else if (selectedCategoryId) {
       if (!quickInputText.trim()) return;
@@ -532,8 +541,12 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         setSelectedCategoryId('');
         setQuickInputText('');
         router.refresh();
-      } catch (error) {
-        toast({ title: "Error adding item", variant: "destructive" });
+      } catch {
+        toast({
+          title: "Error adding item",
+          description: "An unexpected error occurred.",
+          variant: "destructive",
+        });
       }
     }
   };
@@ -998,8 +1011,12 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                   }
                   toast({ title: 'Item enhanced!', description: 'The item was updated with your audio.' });
                   router.refresh();
-                } catch (err) {
-                  toast({ title: 'Enhancement failed', description: err instanceof Error ? err.message : String(err), variant: 'destructive' });
+                } catch {
+                  toast({
+                    title: "Enhancement Failed",
+                    description: "An unexpected error occurred during enhancement.",
+                    variant: "destructive",
+                  });
                 } finally {
                   setEnhanceLoading(false);
                   setEnhanceModalOpen(false);

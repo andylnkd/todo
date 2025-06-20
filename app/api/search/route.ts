@@ -45,7 +45,26 @@ export async function GET(req: NextRequest) {
         );
 
         // Process the flat results into a nested structure
-        const categoriesMap = results.reduce((acc: Map<string, any>, row) => {
+        interface NextStep {
+            id: string;
+            text: string | null;
+            completed: boolean | null;
+            dueDate: Date | null;
+        }
+
+        interface ActionItem {
+            actionItemId: string;
+            actionItem: string | null;
+            dueDate: Date | null;
+            nextSteps: NextStep[];
+        }
+
+        interface Category {
+            id: string;
+            name: string | null;
+            items: Map<string, ActionItem>;
+        }
+        const categoriesMap = results.reduce((acc: Map<string, Category>, row) => {
             if (!row.categoryId) return acc;
             
             const categoryId = row.categoryId;
@@ -59,7 +78,7 @@ export async function GET(req: NextRequest) {
             
             const category = acc.get(categoryId);
 
-            if (row.actionItemId && !category.items.has(row.actionItemId)) {
+            if (category && row.actionItemId && !category.items.has(row.actionItemId)) {
                 category.items.set(row.actionItemId, {
                     actionItemId: row.actionItemId,
                     actionItem: row.actionItemText,
@@ -75,11 +94,14 @@ export async function GET(req: NextRequest) {
                     completed: row.nextStepCompleted,
                     dueDate: row.dueDate ? new Date(row.dueDate) : null
                 };
-                category.items.get(row.actionItemId).nextSteps.push(nextStep);
+                const actionItem = acc.get(categoryId)?.items.get(row.actionItemId);
+                if (actionItem) {
+                    actionItem.nextSteps.push(nextStep);
+                }
             }
 
             return acc;
-        }, new Map());
+        }, new Map<string, Category>());
 
         // Convert map to array
         const finalResults = Array.from(categoriesMap.values()).map(category => ({

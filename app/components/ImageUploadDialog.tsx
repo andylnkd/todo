@@ -1,7 +1,5 @@
 import React, { useRef, useState } from 'react';
 import { Camera, Wand2, CheckCircle, Loader2, XCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 
 const ImageUploadDialog: React.FC = () => {

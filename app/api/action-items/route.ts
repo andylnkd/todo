@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../drizzle/db';
 import { actionItems } from '../../../drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 interface RequestBody {
     actionItemIds: string[];
@@ -21,7 +21,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Update action item text, category, and/or due date
-    const updateData: any = {
+    const updateData: {
+      updatedAt: Date;
+      actionItem?: string;
+      categoryId?: string;
+      dueDate?: Date | null;
+    } = {
       updatedAt: new Date()
     };
     if (actionItem) updateData.actionItem = actionItem;

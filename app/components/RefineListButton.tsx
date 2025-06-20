@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, Wand2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 interface Category {
   id: string;
@@ -14,16 +14,24 @@ interface Category {
   }[];
 }
 
+interface RefinedStructure {
+    name: string;
+    items: {
+        actionItem: string;
+        nextSteps: string[];
+    }[];
+}
+
 interface RefineListButtonProps {
   categories: Category[];
-  onApply: (refinedStructure: any) => Promise<void>;
+  onApply: (refinedStructure: RefinedStructure[]) => Promise<void>;
 }
 
 export function RefineListButton({ categories, onApply }: RefineListButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [suggestionsText, setSuggestionsText] = useState<string>("");
-  const [proposedStructure, setProposedStructure] = useState<any | null>(null);
+  const [proposedStructure, setProposedStructure] = useState<RefinedStructure[] | null>(null);
   const { toast } = useToast();
 
   const fetchRefinements = async () => {

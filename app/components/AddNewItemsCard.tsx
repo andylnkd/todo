@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AudioRecorderWrapper from "./AudioRecorderWrapper";
 import ImageUploadDialog from "./ImageUploadDialog";
 import { MoreHorizontal, Keyboard, Camera } from 'lucide-react';
@@ -16,7 +16,6 @@ interface AddNewItemsCardProps {
   onAddCategory: (name: string) => Promise<string | null>;
   onAddActionItem: (categoryId: string, text: string) => Promise<void>;
   onTranscriptProcessed: (transcript: string) => Promise<void>;
-  getEmojiForCategory: (name: string) => string;
 }
 
 export default function AddNewItemsCard({
@@ -24,19 +23,17 @@ export default function AddNewItemsCard({
   onAddCategory,
   onAddActionItem,
   onTranscriptProcessed,
-  getEmojiForCategory
 }: AddNewItemsCardProps) {
   const { toast } = useToast();
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [actionItemText, setActionItemText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [showTextInput, setShowTextInput] = useState(false);
   const [showImageInput, setShowImageInput] = useState(false);
 
   const handleAdd = async () => {
+    setLoading(true);
     try {
       if (selectedCategoryId === '__new__') {
         if (!newCategoryName.trim() || !actionItemText.trim()) {
@@ -63,6 +60,8 @@ export default function AddNewItemsCard({
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       toast({ title: "An error occurred", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -146,8 +145,6 @@ export default function AddNewItemsCard({
           >
             {loading ? "Saving..." : "Add"}
           </button>
-          {error && <div className="text-red-500 text-sm mt-1">{error}</div>}
-          {success && <div className="text-green-600 text-sm mt-1">Added!</div>}
         </div>
       )}
       {/* Show Image Input Below Hero if Selected */}

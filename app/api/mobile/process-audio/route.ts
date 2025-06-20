@@ -4,33 +4,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../../drizzle/db';
 import * as schema from '../../../../drizzle/schema';
-import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions';
-import { Readable } from 'stream';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY;
-
-interface AssemblyAIResponse {
-    text: string;
-}
-
-async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
-    const response = await fetch('https://api.assemblyai.com/v2/transcript', {
-        method: 'POST',
-        headers: {
-            'authorization': ASSEMBLYAI_API_KEY!,
-            'content-type': 'application/json'
-        },
-        body: JSON.stringify({ audio_data: audioBuffer.toString('base64') })
-    });
-
-    const data: AssemblyAIResponse = await response.json();
-    return data.text;
-}
 
 // Debug logging function
-const log = (message: string, data?: any) => {
+const log = (message: string, data?: Record<string, unknown>) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${message}`, data ? JSON.stringify(data, null, 2) : '');
 };

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../../drizzle/db';
 import * as schema from '../../../../drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 export async function GET() {
   try {
@@ -58,7 +58,7 @@ export async function GET() {
     });
 
     return NextResponse.json({ categories: categoriesWithItems });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

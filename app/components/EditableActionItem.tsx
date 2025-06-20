@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Edit2, Check, X } from 'lucide-react';
-import { useToast } from '../../hooks/use-toast';
 import { Calendar } from '../../components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { Calendar as CalendarIcon } from 'lucide-react';
@@ -15,19 +14,14 @@ interface EditableActionItemProps {
   initialText: string;
   initialDueDate: string | null;
   onSave: (id: string, newText: string, newDueDate: Date | null) => Promise<void>;
-  onAddNextStep: (actionItemId: string, text: string) => Promise<void>;
-  onDelete: () => Promise<void>;
   itemTypeLabel: 'Action Item' | 'Category';
 }
 
-const EditableActionItem: React.FC<EditableActionItemProps> = ({ id, initialText, initialDueDate, onSave, onAddNextStep, onDelete, itemTypeLabel }) => {
+const EditableActionItem: React.FC<EditableActionItemProps> = ({ id, initialText, initialDueDate, onSave, itemTypeLabel }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(initialText);
   const [dueDate, setDueDate] = useState<Date | null>(initialDueDate ? new Date(initialDueDate) : null);
-  const [showNextStepInput, setShowNextStepInput] = useState(false);
-  const [nextStepText, setNextStepText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
 
   const handleSave = async (newText: string, newDueDate?: Date | null) => {
     setIsEditing(false);

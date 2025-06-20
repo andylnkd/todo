@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { processExtractedItemsAndSave } from '@/app/server-actions/transcriptActions';
-import { db } from '../../../drizzle/db';
-import * as schema from '../../../drizzle/schema';
-import { eq } from 'drizzle-orm';
 
 interface RequestBody {
     items: {
@@ -22,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body: RequestBody = await req.json();
-    const { items, itemType } = body;
+    const { items } = body;
 
     if (!Array.isArray(items)) {
       return NextResponse.json({ error: 'Invalid items format. Expected an array.' }, { status: 400 });

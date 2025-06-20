@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     // Await the clerkClient() promise first, then access users
     const client = await clerkClient(); 
     const user = await client.users.getUser(userId); 
-    const userEmail = user.emailAddresses.find((e: { id: string; emailAddress: string }) => e.id === user.primaryEmailAddressId)?.emailAddress; 
+    const userEmail = user.emailAddresses.find(email => email.id === user.primaryEmailAddressId)?.emailAddress; 
     const userFirstName = user.firstName;
 
     if (!userEmail) {
@@ -90,11 +90,11 @@ export async function POST(request: NextRequest) {
     // Get additional emails from request body (optional)
     let additionalEmails: string[] = [];
     try {
-      const body = await request.json();
+      const body: { emails?: string[] } = await request.json();
       if (body.emails && Array.isArray(body.emails)) {
-        additionalEmails = body.emails.filter((email: any) => typeof email === 'string' && isValidEmail(email));
+        additionalEmails = body.emails.filter((email: string) => typeof email === 'string' && isValidEmail(email));
       }
-    } catch (e) {
+    } catch {
        // Ignore if request body is empty or not valid JSON
        console.log("No valid additional emails in request body or invalid format.");
     }
