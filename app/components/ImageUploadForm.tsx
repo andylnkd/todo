@@ -3,17 +3,18 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { X, Upload } from 'lucide-react';
+import { X, Upload, File as FileIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ImageUploadFormProps {
-  onImageUploaded: (file: File) => Promise<void>;
+  onImageUploaded: (formData: FormData) => Promise<void>;
   onClose: () => void;
 }
 
 export default function ImageUploadForm({ onImageUploaded, onClose }: ImageUploadFormProps) {
   const { toast } = useToast();
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -27,7 +28,9 @@ export default function ImageUploadForm({ onImageUploaded, onClose }: ImageUploa
       return;
     }
     try {
-      await onImageUploaded(selectedFile);
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      await onImageUploaded(formData);
       toast({ title: "Image uploaded successfully!" });
       onClose();
     } catch (err) {
@@ -47,10 +50,18 @@ export default function ImageUploadForm({ onImageUploaded, onClose }: ImageUploa
       <div className="flex items-center gap-2">
         <Input
           type="file"
-          accept="image/*"
+          ref={fileInputRef}
           onChange={handleFileChange}
-          className="flex-1"
+          className="hidden"
         />
+        <Button
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex-1"
+        >
+          <FileIcon className="h-4 w-4 mr-2" />
+          {selectedFile ? selectedFile.name : 'Choose File'}
+        </Button>
         <Button onClick={handleUpload} disabled={!selectedFile}>
           <Upload className="h-4 w-4 mr-2" /> Upload
         </Button>

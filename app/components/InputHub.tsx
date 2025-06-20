@@ -20,7 +20,7 @@ interface InputHubProps {
   onTranscriptProcessed: (transcript: string) => Promise<void>;
   onAddCategory: (name: string) => Promise<string | null>;
   onAddActionItem: (categoryId: string, text: string) => Promise<void>;
-  onImageUploaded: (file: File) => Promise<void>;
+  onImageUploaded: (formData: FormData) => Promise<void>;
 }
 
 export default function InputHub({

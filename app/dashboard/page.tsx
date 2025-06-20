@@ -182,8 +182,12 @@ async function handleDashboardTranscriptProcessed(transcript: string) {
   }
 }
 
-async function handleImageUploaded(file: File) {
+async function handleImageUploaded(formData: FormData) {
   'use server';
+  const file = formData.get('file') as File;
+  if (!file) {
+    throw new Error('No file uploaded.');
+  }
   // Placeholder logic for image handling
   console.log('Received image on server:', file.name, file.size);
   // TODO: Implement image processing and saving logic (e.g., save to blob storage, process with AI)
