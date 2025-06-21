@@ -6,7 +6,7 @@ import * as schema from '../../drizzle/schema';
 import { eq, and, gte, lte, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { processTranscriptAndSave, processImageAndSave } from '@/app/server-actions/transcriptActions';
+import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions';
 import InputHub from '../components/InputHub';
 import ActionItemsTable from '../components/ActionItemsTable';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
@@ -123,22 +123,23 @@ async function deleteCategory(id: string) {
   revalidatePath('/daily');
 }
 
-async function handleDailyImageProcessed(data: { image: string; mimeType: string }) {
+async function handleSaveExtractedItems(items: string[]) {
   'use server';
   const { userId } = await auth();
-  if (!userId) throw new Error('User not authenticated for image processing');
+  if (!userId) throw new Error('User not authenticated');
+
+  const transcript = items.join('\\n');
+  if (!transcript) return;
 
   try {
-    await processImageAndSave({
-      image: data.image,
-      mimeType: data.mimeType,
+    await processTranscriptAndSave({
+      transcript,
       userId,
       itemType: 'daily',
     });
     revalidatePath('/daily');
   } catch (error) {
-    console.error("Daily image processing error:", error);
-    // Re-throw the error to be caught by the client-side toast notification
+    console.error("Daily extracted items processing error:", error);
     throw error;
   }
 }
@@ -266,7 +267,7 @@ export default async function DailyPage() {
               onTranscriptProcessed={handleDailyTranscriptProcessed}
               onAddCategory={addCategory}
               onAddActionItem={addActionItem}
-              onImageProcessed={handleDailyImageProcessed}
+              onSaveExtractedItems={handleSaveExtractedItems}
             />
             
             <Card>

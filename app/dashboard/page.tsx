@@ -11,6 +11,7 @@ import { revalidatePath } from 'next/cache'; // Import for revalidation
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { processImageAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
+import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -21,7 +22,6 @@ import RefineListWrapper from '../components/RefineListWrapper'; // Add this imp
 import SendWhatsAppButton from '../components/SendWhatsAppButton';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
-import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 import InputHub from '../components/InputHub'; // Import the new InputHub
 
 // --- Server Actions for Saving ---
@@ -183,22 +183,23 @@ async function handleDashboardTranscriptProcessed(transcript: string) {
   }
 }
 
-async function handleDashboardImageProcessed(data: { image: string; mimeType: string }) {
+async function handleSaveExtractedItems(items: string[]) {
   'use server';
   const { userId } = await auth();
-  if (!userId) throw new Error('User not authenticated for image processing');
+  if (!userId) throw new Error('User not authenticated');
+
+  const transcript = items.join('\\n');
+  if (!transcript) return;
 
   try {
-    await processImageAndSave({
-      image: data.image,
-      mimeType: data.mimeType,
+    await processTranscriptAndSave({
+      transcript,
       userId,
       itemType: 'regular',
     });
     revalidatePath('/dashboard');
   } catch (error) {
-    console.error("Dashboard image processing error:", error);
-    // Re-throw the error to be caught by the client-side toast notification
+    console.error("Dashboard extracted items processing error:", error);
     throw error;
   }
 }
@@ -305,7 +306,7 @@ export default async function Dashboard() {
               onTranscriptProcessed={handleDashboardTranscriptProcessed}
               onAddCategory={addCategory}
               onAddActionItem={addActionItem}
-              onImageProcessed={handleDashboardImageProcessed}
+              onSaveExtractedItems={handleSaveExtractedItems}
             />
             
             <Card>
