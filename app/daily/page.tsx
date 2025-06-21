@@ -6,11 +6,7 @@ import * as schema from '../../drizzle/schema';
 import { eq, and, gte, lte, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { processTranscriptAndSave, processExtractedItemsAndSave, processImageAndSave } from '@/app/server-actions/transcriptActions';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { processTranscriptAndSave, processImageAndSave } from '@/app/server-actions/transcriptActions';
 import InputHub from '../components/InputHub';
 import ActionItemsTable from '../components/ActionItemsTable';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
@@ -22,70 +18,6 @@ function getTodayTimestamps() {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   return { start, end };
-}
-
-async function addCategoryForDaily(name: string): Promise<string | null> {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  try {
-    const [inserted] = await db.insert(schema.categories)
-      .values({ name, userId })
-      .returning({ id: schema.categories.id });
-    revalidatePath('/daily');
-    return inserted.id;
-  } catch (error) {
-    console.error("Failed to add category:", error);
-    return null;
-  }
-}
-
-async function addActionItemForDaily(categoryId: string, text: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  await db.insert(schema.actionItems).values({ categoryId, actionItem: text, userId, type: 'daily' });
-  revalidatePath('/daily');
-}
-
-async function saveDailyExtractedItems(items: string[]) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  
-  if (items && items.length > 0) {
-    const dailyCategoryName = `Daily Upload: ${new Date().toLocaleDateString()}`;
-    
-    let category = await db.query.categories.findFirst({
-      where: and(
-        eq(schema.categories.userId, userId),
-        eq(schema.categories.name, dailyCategoryName)
-      )
-    });
-    
-    let categoryId: string;
-    if (category) {
-      categoryId = category.id;
-    } else {
-      const [newCategory] = await db.insert(schema.categories)
-        .values({ name: dailyCategoryName, userId })
-        .returning({ id: schema.categories.id });
-      categoryId = newCategory.id;
-    }
-
-    const actionItemsToInsert = items.map((itemText: string) => ({
-      categoryId,
-      actionItem: itemText,
-      userId,
-      type: 'daily',
-      status: 'pending',
-    }));
-
-    if (actionItemsToInsert.length > 0) {
-      await db.insert(schema.actionItems).values(actionItemsToInsert);
-    }
-  }
-  revalidatePath('/daily');
 }
 
 async function addCategory(name: string): Promise<string | null> {

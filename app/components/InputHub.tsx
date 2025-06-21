@@ -3,13 +3,11 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { MoreHorizontal, Keyboard, Camera, Check, X, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Keyboard, Camera, X, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Checkbox } from '@/components/ui/checkbox';
 import AudioRecorderWrapper from './AudioRecorderWrapper';
 import QuickAddForm from './QuickAddForm';
 import ImageUploadForm from './ImageUploadForm';
-import { Card } from './ui/card';
 
 // Define the shape of a category for the props
 interface Category {

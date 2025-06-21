@@ -368,7 +368,7 @@ export async function processExtractedItemsAndSave({
   }
   
   // Find or create the category for these items
-  let category = await db.query.categories.findFirst({
+  const category = await db.query.categories.findFirst({
     where: (categories, { and, eq }) => and(
       eq(categories.userId, userId),
       eq(categories.name, categoryName)

@@ -10,7 +10,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache'; // Import for revalidation
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { processExtractedItemsAndSave, processImageAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
+import { processImageAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -200,22 +200,6 @@ async function handleDashboardImageProcessed(formData: FormData) {
     // Re-throw the error to be caught by the client-side toast notification
     throw error;
   }
-}
-
-async function saveExtractedItems(items: string[]) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  
-  if (items && items.length > 0) {
-    await processExtractedItemsAndSave({
-      items,
-      userId,
-      // We can create a more generic category name now
-      categoryName: `From Image Upload`,
-    });
-  }
-  revalidatePath('/dashboard');
 }
 
 // --- End Server Actions ---
