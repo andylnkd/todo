@@ -8,7 +8,6 @@ import { useToast } from '@/hooks/use-toast';
 import AudioRecorderWrapper from './AudioRecorderWrapper';
 import QuickAddForm from './QuickAddForm';
 import ImageUploadForm from './ImageUploadForm';
-import { Card } from '@/components/ui/card';
 
 // Define the shape of a category for the props
 interface Category {

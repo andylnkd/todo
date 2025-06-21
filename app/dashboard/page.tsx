@@ -10,7 +10,6 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache'; // Import for revalidation
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { processImageAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 
 // Import components

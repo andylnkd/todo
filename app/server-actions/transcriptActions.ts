@@ -254,7 +254,7 @@ export async function enhanceItemOrCategory({
     console.log('[enhanceItemOrCategory] fetched next steps:', nextSteps);
 
     // 2. Prepare LLM prompt
-    const prompt = `You are an assistant helping to update a task.\nCurrent description: ${item.actionItem}\nCurrent next steps: ${nextSteps.map(ns => ns.step).join('; ')}\nNew user input: ${transcript}\nPlease return an updated description and next steps that incorporate the new information.\nReturn as JSON: {\"description\": string, \"nextSteps\": string[]}`;
+    const prompt = `You are an assistant helping to update a task.\nCurrent description: ${item.actionItem}\nCurrent next steps: ${nextSteps.map(ns => ns.step).join('; ')}\nNew user input: ${transcript}\nPlease return an updated description and next steps that incorporate the new information.\nReturn as JSON: {"description": string, "nextSteps": string[]}`;
 
     // 3. Call LLM
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -310,10 +310,10 @@ export async function enhanceItemOrCategory({
       .where(eq(schema.actionItems.categoryId, id));
     if (!category) throw new Error('Category not found');
     console.log('[enhanceItemOrCategory] fetched category:', category);
-    console.log('[enhanceItemOrCategory] fetched items:', items);
+    console.log('[enhanceItemOrCategory] fetched items for category:', items);
 
     // 2. Prepare LLM prompt
-    const prompt = `You are an assistant helping to update a category of tasks.\nCurrent category name: ${category.name}\nCurrent items: ${items.map(i => i.actionItem).join('; ')}\nNew user input: ${transcript}\nPlease return an updated category name (if needed), and an updated list of items that incorporate the new information.\nReturn as JSON: {\"categoryName\": string, \"items\": string[]}`;
+    const prompt = `You are an assistant helping to update a category of tasks.\nCurrent category name: ${category.name}\nCurrent items: ${items.map(i => i.actionItem).join('; ')}\nNew user input: ${transcript}\nPlease return an updated category name (if needed), and an updated list of items that incorporate the new information.\nReturn as JSON: {"categoryName": string, "items": string[]}`;
 
     // 3. Call LLM
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
