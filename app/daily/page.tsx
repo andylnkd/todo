@@ -123,14 +123,15 @@ async function deleteCategory(id: string) {
   revalidatePath('/daily');
 }
 
-async function handleDailyImageProcessed(formData: FormData) {
+async function handleDailyImageProcessed(data: { image: string; mimeType: string }) {
   'use server';
   const { userId } = await auth();
   if (!userId) throw new Error('User not authenticated for image processing');
 
   try {
     await processImageAndSave({
-      formData,
+      image: data.image,
+      mimeType: data.mimeType,
       userId,
       itemType: 'daily',
     });

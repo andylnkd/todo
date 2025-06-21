@@ -21,7 +21,7 @@ interface InputHubProps {
   onTranscriptProcessed: (transcript: string) => Promise<void>;
   onAddCategory: (name: string) => Promise<string | null>;
   onAddActionItem: (categoryId: string, text: string) => Promise<void>;
-  onImageProcessed: (formData: FormData) => Promise<void>;
+  onImageProcessed: (data: { image: string; mimeType: string }) => Promise<void>;
 }
 
 export default function InputHub({
@@ -38,19 +38,28 @@ export default function InputHub({
   const handleFileSelected = async (file: File) => {
     setIsProcessing(true);
     
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      await onImageProcessed(formData);
-      toast({ title: "Image processed successfully!", description: "Categorized items have been added to your list." });
-      setView('main');
-    } catch (error) {
-      console.error("Error in handleFileSelected:", error);
-      toast({ title: "Error processing image", description: error instanceof Error ? error.message : 'Please try again.', variant: "destructive" });
-    } finally {
+    // Convert file to base64 to safely pass to server action
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        // We pass the base64 string and the mime type to the server action
+        await onImageProcessed({ image: base64, mimeType: file.type });
+        toast({ title: "Image processed successfully!", description: "Categorized items have been added to your list." });
+        setView('main');
+      } catch (error) {
+        console.error("Error in handleFileSelected:", error);
+        toast({ title: "Error processing image", description: error instanceof Error ? error.message : 'Please try again.', variant: "destructive" });
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+    reader.onerror = (error) => {
+      console.error("FileReader error:", error);
+      toast({ title: "Error reading file", description: "Could not read the selected file. Please try again.", variant: "destructive" });
       setIsProcessing(false);
-    }
+    };
   };
 
   const renderView = () => {

@@ -154,43 +154,54 @@ export async function processTranscriptAndSave({
 
 /**
  * NEW: Takes an image file, extracts action items, processes them with AI, and saves to DB.
- * @param formData - The FormData object containing the image file.
+ * @param image - The base64 data URL of the image.
+ * @param mimeType - The MIME type of the image.
  * @param userId - The ID of the user.
  * @param itemType - The type of item ('daily' or 'regular').
  */
 export async function processImageAndSave({
-  formData,
+  image,
+  mimeType,
   userId,
   itemType,
 }: {
-  formData: FormData;
+  image: string; // Now a base64 data URL
+  mimeType: string;
   userId: string;
   itemType: 'daily' | 'regular';
 }) {
-  // Step 1: Call the API route to extract text from the image.
-  // We're calling our own API route here. This is a common pattern.
-  const apiRouteUrl = new URL('/api/extract-action-items', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
-  
-  const response = await fetch(apiRouteUrl, {
-    method: 'POST',
-    body: formData,
-  });
+  // The Gemini SDK can handle the blob directly, no need for buffer/upload dance for this model.
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-  if (!response.ok) {
-    const errorBody = await response.json();
-    throw new Error(errorBody.error || 'Failed to extract items from image via API route.');
+  const prompt = `
+You are a task extraction assistant. Your job is to analyze the given image and:
+1. Extract actionable items
+2. Return ONLY a flat JSON array of action item strings.
+
+IMPORTANT: Your response MUST be a valid JSON array with NO markdown formatting or additional text.
+Example: ["Send email to John", "Follow up on the report"]
+If no action items found, return an empty array [].
+`;
+  
+  // The base64 string from the client includes the data URI prefix (e.g., "data:image/png;base64,"), 
+  // which needs to be removed before sending to the Gemini API.
+  const base64Data = image.split(',')[1];
+
+  if (!base64Data) {
+    throw new Error("Invalid base64 image data provided.");
   }
 
-  const result = await response.json();
-  const items: string[] = result.items;
+  const result = await model.generateContent([prompt, { inlineData: { data: base64Data, mimeType: mimeType } }]);
+  const response = await result.response;
+  const text = response.text();
 
-  if (!items || items.length === 0) {
+  if (!text || text.trim() === '') {
     console.log("No items found in image, skipping further processing.");
     return; // Or return a specific message
   }
 
   // Step 2: Join the extracted items into a single transcript string.
-  const transcript = items.join('\\n');
+  const transcript = text;
 
   // Step 3: Use the existing processTranscriptAndSave function to categorize and save.
   await processTranscriptAndSave({

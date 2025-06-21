@@ -183,14 +183,15 @@ async function handleDashboardTranscriptProcessed(transcript: string) {
   }
 }
 
-async function handleDashboardImageProcessed(formData: FormData) {
+async function handleDashboardImageProcessed(data: { image: string; mimeType: string }) {
   'use server';
   const { userId } = await auth();
   if (!userId) throw new Error('User not authenticated for image processing');
 
   try {
     await processImageAndSave({
-      formData,
+      image: data.image,
+      mimeType: data.mimeType,
       userId,
       itemType: 'regular',
     });
