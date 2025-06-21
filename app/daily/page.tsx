@@ -3,15 +3,17 @@ import Link from 'next/link';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../drizzle/db';
 import * as schema from '../../drizzle/schema';
-import { eq, and, gte, lte } from 'drizzle-orm';
+import { eq, and, gte, lte, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
-import { Card, CardContent } from '@/components/ui/card';
-import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { processTranscriptAndSave, processExtractedItemsAndSave, processImageAndSave } from '@/app/server-actions/transcriptActions';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import InputHub from '../components/InputHub';
+import ActionItemsTable from '../components/ActionItemsTable';
+import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 
 // Helper to get start and end of today
 function getTodayTimestamps() {
@@ -46,15 +48,166 @@ async function addActionItemForDaily(categoryId: string, text: string) {
   revalidatePath('/daily');
 }
 
-async function handleImageUploadedForDaily(formData: FormData) {
+async function saveDailyExtractedItems(items: string[]) {
   'use server';
-  const file = formData.get('file') as File;
-  if (!file) {
-    throw new Error('No file uploaded.');
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  
+  if (items && items.length > 0) {
+    const dailyCategoryName = `Daily Upload: ${new Date().toLocaleDateString()}`;
+    
+    let category = await db.query.categories.findFirst({
+      where: and(
+        eq(schema.categories.userId, userId),
+        eq(schema.categories.name, dailyCategoryName)
+      )
+    });
+    
+    let categoryId: string;
+    if (category) {
+      categoryId = category.id;
+    } else {
+      const [newCategory] = await db.insert(schema.categories)
+        .values({ name: dailyCategoryName, userId })
+        .returning({ id: schema.categories.id });
+      categoryId = newCategory.id;
+    }
+
+    const actionItemsToInsert = items.map((itemText: string) => ({
+      categoryId,
+      actionItem: itemText,
+      userId,
+      type: 'daily',
+      status: 'pending',
+    }));
+
+    if (actionItemsToInsert.length > 0) {
+      await db.insert(schema.actionItems).values(actionItemsToInsert);
+    }
   }
-  console.log('Received image on daily page:', file.name, file.size);
-  // TODO: Implement image processing for daily items
   revalidatePath('/daily');
+}
+
+async function addCategory(name: string): Promise<string | null> {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  try {
+    const [inserted] = await db.insert(schema.categories)
+      .values({ name, userId })
+      .returning({ id: schema.categories.id });
+    revalidatePath('/daily');
+    return inserted.id;
+  } catch (error) {
+    console.error("Failed to add category:", error);
+    return null;
+  }
+}
+
+async function addActionItem(categoryId: string, text: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  await db.insert(schema.actionItems).values({ categoryId, actionItem: text, userId, type: 'daily' });
+  revalidatePath('/daily');
+}
+
+async function saveCategoryName(id: string, newName: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  await db.update(schema.categories)
+    .set({ name: newName, updatedAt: new Date() })
+    .where(and(eq(schema.categories.id, id), eq(schema.categories.userId, userId)));
+  revalidatePath('/daily');
+}
+
+async function saveActionItemText(id: string, newText: string, newDueDate?: Date | null) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const updateData: { actionItem: string; updatedAt: Date; dueDate?: Date | null } = { actionItem: newText, updatedAt: new Date() };
+  if (newDueDate !== undefined) {
+    updateData.dueDate = newDueDate;
+  }
+  
+  await db.update(schema.actionItems)
+    .set(updateData)
+    .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
+  revalidatePath('/daily');
+}
+
+async function deleteNextStep(id: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  await db.delete(schema.nextSteps)
+    .where(and(eq(schema.nextSteps.id, id), eq(schema.nextSteps.userId, userId)));
+  revalidatePath('/daily');
+}
+
+async function deleteActionItem(id: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  // First delete all next steps for this action item
+  await db.delete(schema.nextSteps)
+    .where(and(eq(schema.nextSteps.actionItemId, id), eq(schema.nextSteps.userId, userId)));
+  // Then delete the action item
+  await db.delete(schema.actionItems)
+    .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
+  revalidatePath('/daily');
+}
+
+async function deleteCategory(id: string) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  // Find all action item IDs for this category
+  const actionItems = await db.select({ id: schema.actionItems.id })
+    .from(schema.actionItems)
+    .where(and(eq(schema.actionItems.categoryId, id), eq(schema.actionItems.userId, userId)));
+  const actionItemIds = actionItems.map(ai => ai.id);
+
+  if (actionItemIds.length > 0) {
+    // Delete all next steps for these action items
+    await db.delete(schema.nextSteps)
+      .where(and(
+        inArray(schema.nextSteps.actionItemId, actionItemIds),
+        eq(schema.nextSteps.userId, userId)
+      ));
+    // Delete all action items for this category
+    await db.delete(schema.actionItems)
+      .where(and(
+        inArray(schema.actionItems.id, actionItemIds),
+        eq(schema.actionItems.userId, userId)
+      ));
+  }
+  // Delete the category
+  await db.delete(schema.categories)
+    .where(and(eq(schema.categories.id, id), eq(schema.categories.userId, userId)));
+  revalidatePath('/daily');
+}
+
+async function handleDailyImageProcessed(formData: FormData) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('User not authenticated for image processing');
+
+  try {
+    await processImageAndSave({
+      formData,
+      userId,
+      itemType: 'daily',
+    });
+    revalidatePath('/daily');
+  } catch (error) {
+    console.error("Daily image processing error:", error);
+    // Re-throw the error to be caught by the client-side toast notification
+    throw error;
+  }
 }
 
 export default async function DailyPage() {
@@ -65,28 +218,79 @@ export default async function DailyPage() {
 
   const { start, end } = getTodayTimestamps();
 
-  const dailyItems = await db
-    .select({
-      id: schema.actionItems.id,
-      actionItem: schema.actionItems.actionItem,
-      status: schema.actionItems.status,
-      createdAt: schema.actionItems.createdAt,
-    })
-    .from(schema.actionItems)
-    .where(
+  // Fetch all categories for the InputHub dropdown
+  const allCategoriesForUser = await db.query.categories.findMany({
+    where: eq(schema.categories.userId, userId)
+  });
+
+  // Fetch and structure daily items for the ActionItemsTable
+  const dailyItemsRaw = await db
+    .select()
+    .from(schema.categories)
+    .where(eq(schema.categories.userId, userId))
+    .leftJoin(
+      schema.actionItems,
       and(
-        eq(schema.actionItems.userId, userId),
+        eq(schema.categories.id, schema.actionItems.categoryId),
         eq(schema.actionItems.type, 'daily'),
         gte(schema.actionItems.createdAt, start),
         lte(schema.actionItems.createdAt, end)
       )
     )
-    .orderBy(schema.actionItems.createdAt);
+    .leftJoin(
+      schema.nextSteps,
+      eq(schema.actionItems.id, schema.nextSteps.actionItemId)
+    );
 
-  // Fetch categories for the InputHub dropdown
-  const allCategories = await db.query.categories.findMany({
-    where: eq(schema.categories.userId, userId)
+  // Process the rows into a nested structure suitable for ActionItemsTable
+  const categoriesMap = new Map();
+  dailyItemsRaw.forEach((row) => {
+    // Only process rows that have an action item for today
+    if (!row.categories || !row.action_items) return;
+
+    const categoryId = row.categories.id;
+    if (!categoriesMap.has(categoryId)) {
+      categoriesMap.set(categoryId, {
+        id: categoryId,
+        name: row.categories.name,
+        // The status can be derived or added to the schema if needed
+        status: 'pending', 
+        items: new Map()
+      });
+    }
+
+    const category = categoriesMap.get(categoryId);
+    const actionItemId = row.action_items.id;
+
+    if (!category.items.has(actionItemId)) {
+      category.items.set(actionItemId, {
+        actionItemId,
+        actionItem: row.action_items.actionItem,
+        dueDate: row.action_items.dueDate,
+        status: row.action_items.status,
+        nextSteps: []
+      });
+    }
+
+    if (row.next_steps) {
+      const nextStep = {
+        id: row.next_steps.id,
+        text: row.next_steps.step,
+        completed: row.next_steps.completed,
+        dueDate: row.next_steps.dueDate ? new Date(row.next_steps.dueDate) : null
+      };
+      category.items.get(actionItemId).nextSteps.push(nextStep);
+    }
   });
+  
+  // Convert Maps to arrays for the final structure
+  const categories = Array.from(categoriesMap.values()).map(category => ({
+    ...category,
+    items: Array.from(category.items.values())
+  }));
+
+  // Sort categories by name
+  categories.sort((a, b) => a.name.localeCompare(b.name));
 
   async function handleDailyTranscriptProcessed(transcript: string) {
     'use server';
@@ -105,97 +309,53 @@ export default async function DailyPage() {
     }
   }
 
-  async function toggleDailyItemStatus(id: string, status: string) {
-    'use server';
-    if (!userId) throw new Error('User not authenticated');
-    await db.update(schema.actionItems)
-      .set({ status: status === 'pending' ? 'completed' : 'pending', updatedAt: new Date() })
-      .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
-    revalidatePath('/daily');
-  }
-
-  async function deleteDailyItem(id: string) {
-    'use server';
-    if (!userId) throw new Error('User not authenticated');
-    // First delete all next steps for this action item
-    await db.delete(schema.nextSteps)
-      .where(and(eq(schema.nextSteps.actionItemId, id), eq(schema.nextSteps.userId, userId)));
-    // Then delete the action item
-    await db.delete(schema.actionItems)
-      .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
-    revalidatePath('/daily');
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b bg-white shadow-sm">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-baseline gap-4">
-              <Link href="/dashboard" className="text-base font-medium text-gray-600 hover:text-primary transition-colors">
-                Dashboard
-              </Link>
-              <h1 className="text-2xl font-semibold text-gray-800">Daily Dump</h1>
-            </div>
-            <UserButton afterSignOutUrl="/" />
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="max-w-2xl mx-auto space-y-8">
-          <InputHub
-            categories={allCategories}
-            onTranscriptProcessed={handleDailyTranscriptProcessed}
-            onAddCategory={addCategoryForDaily}
-            onAddActionItem={addActionItemForDaily}
-            onImageUploaded={handleImageUploadedForDaily}
-          />
-          
-          <div className="space-y-6 pt-4">
-            <h2 className="text-xl font-semibold text-gray-700">Today&apos;s Entries ({dailyItems.length})</h2>
-            {dailyItems.length > 0 ? (
-              <div className="space-y-4">
-                {dailyItems.map((item) => (
-                  <Card key={item.id} className="shadow-sm hover:shadow-md transition-shadow bg-white">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <form action={async () => { 'use server'; await toggleDailyItemStatus(item.id, item.status); }}>
-                          <button type="submit">
-                            <Checkbox checked={item.status === 'completed'} className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground" />
-                          </button>
-                        </form>
-                        <p className={cn("flex-1 text-gray-800 text-base break-words", item.status === 'completed' && 'line-through text-muted-foreground')}>{item.actionItem}</p>
-                        <form action={async () => { 'use server'; await deleteDailyItem(item.id); }}>
-                          <Button type="submit" variant="ghost" size="icon" className="h-6 w-6 text-destructive">
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </form>
-                      </div>
-                      <div className="mt-2 pl-0 sm:pl-0 flex flex-col sm:flex-row sm:justify-between sm:items-center text-xs text-gray-500">
-                        <p>
-                          Status: <span className={`font-medium ${item.status === 'pending' ? 'text-orange-500' : 'text-green-500'}`}>{item.status}</span>
-                        </p>
-                        <p className="mt-1 sm:mt-0">
-                          Added: {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+    <SelectedItemsProvider>
+      <div className="min-h-screen bg-gray-50">
+        <header className="border-b bg-white shadow-sm">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-baseline gap-4">
+                <Link href="/dashboard" className="text-base font-medium text-gray-600 hover:text-primary transition-colors">
+                  Dashboard
+                </Link>
+                <h1 className="text-2xl font-semibold text-gray-800">Daily Dump</h1>
               </div>
-            ) : (
-              <Card className="shadow bg-white">
-                <CardContent className="p-6 text-center">
-                  <p className="text-gray-500">
-                    No daily items logged yet for today. Use the recorder above to add some!
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+              <UserButton afterSignOutUrl="/" />
+            </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </header>
+
+        <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="max-w-4xl mx-auto space-y-8">
+            <InputHub
+              categories={allCategoriesForUser}
+              onTranscriptProcessed={handleDailyTranscriptProcessed}
+              onAddCategory={addCategory}
+              onAddActionItem={addActionItem}
+              onImageProcessed={handleDailyImageProcessed}
+            />
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Today&apos;s Entries</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ActionItemsTable
+                  categories={categories}
+                  onSaveCategory={saveCategoryName}
+                  onSaveActionItem={saveActionItemText}
+                  onDeleteNextStep={deleteNextStep}
+                  onAddActionItem={addActionItem}
+                  onDeleteActionItem={deleteActionItem}
+                  onAddCategory={addCategory}
+                  onDeleteCategory={deleteCategory}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </SelectedItemsProvider>
   );
 } 

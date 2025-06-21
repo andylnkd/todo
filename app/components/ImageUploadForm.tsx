@@ -1,70 +1,79 @@
 'use client';
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { X, Upload, File as FileIcon } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Image as ImageIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ImageUploadFormProps {
-  onImageUploaded: (formData: FormData) => Promise<void>;
-  onClose: () => void;
+  onFileSelected: (file: File) => void;
+  isProcessing: boolean;
 }
 
-export default function ImageUploadForm({ onImageUploaded, onClose }: ImageUploadFormProps) {
-  const { toast } = useToast();
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+export default function ImageUploadForm({ onFileSelected, isProcessing }: ImageUploadFormProps) {
+  const [isDragging, setIsDragging] = React.useState(false);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
-      setSelectedFile(event.target.files[0]);
+      onFileSelected(event.target.files[0]);
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      toast({ title: "No file selected", variant: "destructive" });
-      return;
-    }
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      await onImageUploaded(formData);
-      toast({ title: "Image uploaded successfully!" });
-      onClose();
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      toast({ title: "Error uploading image", variant: "destructive", description: error.message });
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isProcessing) return;
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isProcessing) return;
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      onFileSelected(e.dataTransfer.files[0]);
     }
   };
 
   return (
-    <div className="p-4 border rounded-lg bg-background space-y-3">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold">Add from Image</h3>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-6 w-6">
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-      <div className="flex items-center gap-2">
+    <div
+      className={cn(
+        "p-4 border-2 border-dashed rounded-lg bg-background space-y-3 transition-colors",
+        isDragging && !isProcessing && "bg-primary/10 border-primary"
+      )}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragEnter}
+      onDrop={handleDrop}
+    >
+      <div className="flex flex-col items-center justify-center text-center">
+        <ImageIcon className="h-10 w-10 text-muted-foreground mb-2" />
+        <p className="font-semibold mb-1">Drag & drop an image here</p>
+        <p className="text-sm text-muted-foreground mb-3">or</p>
+        <label
+          htmlFor="file-upload"
+          className={cn(
+            "text-primary underline cursor-pointer",
+            isProcessing && "cursor-not-allowed opacity-50"
+          )}
+        >
+          Choose File
+        </label>
         <Input
+          id="file-upload"
           type="file"
-          ref={fileInputRef}
+          accept="image/*"
           onChange={handleFileChange}
           className="hidden"
+          disabled={isProcessing}
         />
-        <Button
-          variant="outline"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex-1"
-        >
-          <FileIcon className="h-4 w-4 mr-2" />
-          {selectedFile ? selectedFile.name : 'Choose File'}
-        </Button>
-        <Button onClick={handleUpload} disabled={!selectedFile}>
-          <Upload className="h-4 w-4 mr-2" /> Upload
-        </Button>
       </div>
     </div>
   );

@@ -117,7 +117,7 @@ export async function processTranscriptAndSave({
           actionItem: string;
           userId: string;
           transcriptionId: string;
-          status: string;
+          status: 'pending' | 'completed';
           type?: string;
         } = {
           categoryId: categoryId,
@@ -150,6 +150,54 @@ export async function processTranscriptAndSave({
   });
 
   return parsedData;
+}
+
+/**
+ * NEW: Takes an image file, extracts action items, processes them with AI, and saves to DB.
+ * @param formData - The FormData object containing the image file.
+ * @param userId - The ID of the user.
+ * @param itemType - The type of item ('daily' or 'regular').
+ */
+export async function processImageAndSave({
+  formData,
+  userId,
+  itemType,
+}: {
+  formData: FormData;
+  userId: string;
+  itemType: 'daily' | 'regular';
+}) {
+  // Step 1: Call the API route to extract text from the image.
+  // We're calling our own API route here. This is a common pattern.
+  const apiRouteUrl = new URL('/api/extract-action-items', process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000');
+  
+  const response = await fetch(apiRouteUrl, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json();
+    throw new Error(errorBody.error || 'Failed to extract items from image via API route.');
+  }
+
+  const result = await response.json();
+  const items: string[] = result.items;
+
+  if (!items || items.length === 0) {
+    console.log("No items found in image, skipping further processing.");
+    return; // Or return a specific message
+  }
+
+  // Step 2: Join the extracted items into a single transcript string.
+  const transcript = items.join('\\n');
+
+  // Step 3: Use the existing processTranscriptAndSave function to categorize and save.
+  await processTranscriptAndSave({
+    transcript,
+    userId,
+    itemType,
+  });
 }
 
 /**
@@ -312,31 +360,47 @@ export async function processExtractedItemsAndSave({
   userId: string;
   categoryName?: string;
 }) {
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    throw new Error('No items to save');
+  console.log(`Processing ${items.length} extracted items for user ${userId}`);
+
+  if (!items || items.length === 0) {
+    console.log("No items to save.");
+    return;
   }
-
-  await db.transaction(async (tx) => {
-    // Create category
-    const [category] = await tx.insert(schema.categories).values({
-      name: categoryName,
-      userId,
-    }).returning({ id: schema.categories.id, name: schema.categories.name });
-    if (!category) throw new Error('Failed to create category');
-
-    // Insert action items
-    await Promise.all(
-      items.map(itemText => 
-        tx.insert(schema.actionItems).values({
-          categoryId: category.id,
-          actionItem: itemText,
-          userId,
-          status: 'pending',
-          type: 'regular',
-        }).returning()
-      )
-    );
+  
+  // Find or create the category for these items
+  let category = await db.query.categories.findFirst({
+    where: (categories, { and, eq }) => and(
+      eq(categories.userId, userId),
+      eq(categories.name, categoryName)
+    ),
   });
 
-  return { success: true };
+  let categoryId: string;
+  if (category) {
+    categoryId = category.id;
+  } else {
+    console.log(`Category "${categoryName}" not found, creating it.`);
+    const [newCategory] = await db.insert(schema.categories)
+      .values({ name: categoryName, userId: userId })
+      .returning({ id: schema.categories.id });
+    categoryId = newCategory.id;
+  }
+
+  if (!categoryId) {
+    throw new Error('Could not find or create a category for the items.');
+  }
+
+  // Prepare and insert all action items
+  const actionItemsToInsert = items.map((itemText) => ({
+    categoryId: categoryId,
+    actionItem: itemText,
+    userId: userId,
+    status: 'pending', // Default status
+    // Note: 'type' is not specified here, it will use the DB default ('regular')
+  }));
+
+  if (actionItemsToInsert.length > 0) {
+    console.log(`Inserting ${actionItemsToInsert.length} action items into category ${categoryId}`);
+    await db.insert(schema.actionItems).values(actionItemsToInsert);
+  }
 } 

@@ -10,6 +10,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache'; // Import for revalidation
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { processExtractedItemsAndSave, processImageAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -182,15 +183,38 @@ async function handleDashboardTranscriptProcessed(transcript: string) {
   }
 }
 
-async function handleImageUploaded(formData: FormData) {
+async function handleDashboardImageProcessed(formData: FormData) {
   'use server';
-  const file = formData.get('file') as File;
-  if (!file) {
-    throw new Error('No file uploaded.');
+  const { userId } = await auth();
+  if (!userId) throw new Error('User not authenticated for image processing');
+
+  try {
+    await processImageAndSave({
+      formData,
+      userId,
+      itemType: 'regular',
+    });
+    revalidatePath('/dashboard');
+  } catch (error) {
+    console.error("Dashboard image processing error:", error);
+    // Re-throw the error to be caught by the client-side toast notification
+    throw error;
   }
-  // Placeholder logic for image handling
-  console.log('Received image on server:', file.name, file.size);
-  // TODO: Implement image processing and saving logic (e.g., save to blob storage, process with AI)
+}
+
+async function saveExtractedItems(items: string[]) {
+  'use server';
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+  
+  if (items && items.length > 0) {
+    await processExtractedItemsAndSave({
+      items,
+      userId,
+      // We can create a more generic category name now
+      categoryName: `From Image Upload`,
+    });
+  }
   revalidatePath('/dashboard');
 }
 
@@ -296,7 +320,7 @@ export default async function Dashboard() {
               onTranscriptProcessed={handleDashboardTranscriptProcessed}
               onAddCategory={addCategory}
               onAddActionItem={addActionItem}
-              onImageUploaded={handleImageUploaded}
+              onImageProcessed={handleDashboardImageProcessed}
             />
             
             <Card>
