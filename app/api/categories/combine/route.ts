@@ -67,14 +67,9 @@ export async function POST(req: Request) {
         // Use AI to suggest a name
         try {
           const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-          const prompt = `
-            I have ${categoriesToMerge.length} categories to merge. Please suggest a concise, descriptive name for the combined category.
-            
-            Categories:
-            ${categoriesToMerge.map(cat => `- ${cat.name}`).join('\n')}
-            
-            Return ONLY the suggested name, nothing else.
-          `;
+          const prompt = CATEGORY_MERGE_PROMPT
+            .replace('{numCategories}', categoriesToMerge.length.toString())
+            .replace('{categoriesList}', categoriesToMerge.map(cat => `- ${cat.name}`).join('\n'));
           
           const result = await model.generateContent(prompt);
           const response = await result.response;

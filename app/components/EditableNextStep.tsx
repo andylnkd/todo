@@ -8,7 +8,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Edit2, Check, X, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/app/utils';
+import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 

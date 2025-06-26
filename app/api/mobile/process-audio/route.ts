@@ -14,33 +14,7 @@ const log = (message: string, data?: Record<string, unknown>) => {
   console.log(`[${timestamp}] ${message}`, data ? JSON.stringify(data, null, 2) : '');
 };
 
-const PROMPT = `
-You are a task extraction assistant. Your job is to analyze the given transcript and:
-1. Extract actionable items
-2. Group them by logical categories/themes
-3. For each action item, provide specific, concrete next steps
-IMPORTANT: Your response MUST be a valid JSON object with NO markdown formatting or additional text.
-Use this exact structure:
-{
-  "categories": [
-    {
-      "name": "string",
-      "items": [
-        {
-          "actionItem": "string",
-          "nextSteps": ["string"]
-        }
-      ]
-    }
-  ]
-}
-REQUIREMENTS:
-- Return ONLY the JSON object, no other text or formatting
-- No markdown code blocks, no backticks
-- Each category must have at least one action item
-- Each action item must have at least one next step
-- If no action items found, return {"categories": []}
-`;
+import { TASK_EXTRACTION_PROMPT } from '@/app/server-actions/transcriptActions';
 
 function corsHeaders() {
   return {
@@ -139,7 +113,7 @@ export async function POST(request: NextRequest) {
       // Process transcript with Gemini
       log('🤖 Processing transcript with Gemini AI');
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-      const result = await model.generateContent([PROMPT, transcript]);
+      const result = await model.generateContent([TASK_EXTRACTION_PROMPT, transcript]);
       const response = await result.response;
       let text = response.text();
       log('🎯 Received AI response', { responseLength: text.length });

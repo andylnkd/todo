@@ -8,16 +8,6 @@ if (!process.env.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const PROMPT_FOR_EXTRACTION = `
-You are a task extraction assistant. Your job is to analyze the given image and:
-1. Extract actionable items
-2. Return ONLY a flat JSON array of action item strings.
-
-IMPORTANT: Your response MUST be a valid JSON array with NO markdown formatting or additional text.
-Example: ["Send email to John", "Follow up on the report"]
-If no action items found, return an empty array [].
-`;
-
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -33,7 +23,7 @@ export async function POST(req: NextRequest) {
     
     const base64Data = Buffer.from(await imageBlob.arrayBuffer()).toString("base64");
 
-    const result = await model.generateContent([PROMPT_FOR_EXTRACTION, { inlineData: { data: base64Data, mimeType: imageBlob.type } }]);
+    const result = await model.generateContent([FLAT_EXTRACTION_PROMPT, { inlineData: { data: base64Data, mimeType: imageBlob.type } }]);
     const response = await result.response;
     const text = response.text();
 

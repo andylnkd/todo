@@ -1,7 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
-import { Button } from './components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
 export default async function Home() {
   const { userId } = await auth();

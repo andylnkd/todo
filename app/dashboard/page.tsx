@@ -14,7 +14,7 @@ import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import SendDashboardButton from '../components/SendDashboardButton'; // Use relative path
 import CopyMarkdownButton from '../components/CopyMarkdownButton'; // Import the new button
 import RefineListWrapper from '../components/RefineListWrapper'; // Add this import

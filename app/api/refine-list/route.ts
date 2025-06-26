@@ -1,30 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { db } from '../../../drizzle/db';
-import * as schema from '../../../drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { jsonrepair } from 'jsonrepair';
-
-// --- Type Definitions ---
-
-// Structure matching data fetched from DB (includes IDs)
-interface NextStepDetail {
-  id: string;
-  text: string;
-  completed: boolean;
-  dueDate?: Date | null;
-}
-interface ActionItemWithNextSteps {
-  actionItemId: string;
-  actionItem: string;
-  nextSteps: NextStepDetail[];
-}
-interface CategoryWithItems {
-  id: string;
-  name: string;
-  items: ActionItemWithNextSteps[];
-}
+import { getFormattedActionItems, FormattedCategoryData } from '@/app/lib/data';
 
 // Structure Gemini is expected to return (no IDs, simplified next steps)
 interface GeminiActionItem {
@@ -68,145 +46,44 @@ try {
 
 // --- Prompt Template ---
 
-const PROMPT_TEMPLATE = `
-You are a productivity assistant specializing in refining to-do lists.
-Analyze the following JSON data representing a user's current categories, action items, and next steps.
-Your goal is to consolidate categories where logical (merge similar themes), refine action item wording for clarity and conciseness, and ensure action items are grouped under the most appropriate category.
-
-Return a revised structure as a valid JSON object containing ONLY the proposed list structure under the key "proposedStructure" AND a textual summary of the key changes made under the key "changeSummary".
-
-IMPORTANT:
-- The output MUST be ONLY the JSON object, with no markdown formatting, backticks, or any surrounding text.
-- The structure of the JSON object must strictly follow this format:
-  {
-    "proposedStructure": [
-      {
-        "name": "string (refined category name)",
-        "items": [
-          {
-            "actionItem": "string (refined action item text)",
-            "nextSteps": ["string (original next step text)"]
-          }
-        ]
-      }
-    ],
-    "changeSummary": "string (A concise summary of changes, e.g., 'Merged 'X' and 'Y' categories, renamed item 'Z'.')"
-  }
-- Do NOT include IDs in your proposed structure. Focus on names, items, and steps.
-- If you merge categories or move action items, reflect that in the new structure and mention it in the summary.
-- If the input list is empty or has no clear actions, return: {"proposedStructure": [], "changeSummary": "No changes suggested as the list is empty."}
-
-Current List Data:
-\`\`\`json
-__LIST_DATA__
-\`\`\`
-
-Refined List JSON Output (including summary):
-`;
-
-// --- Data Fetching and Formatting ---
-
-async function fetchAndFormatData(userId: string): Promise<CategoryWithItems[]> {
-  // Fetch data (similar to dashboard)
-  const userCategories = await db
-    .select({
-      categoryId: schema.categories.id,
-      categoryName: schema.categories.name,
-      actionItemId: schema.actionItems.id,
-      actionItemText: schema.actionItems.actionItem,
-      nextStepId: schema.nextSteps.id,
-      nextStepText: schema.nextSteps.step,
-      nextStepCompleted: schema.nextSteps.completed,
-      actionItemCreatedAt: schema.actionItems.createdAt,
-    })
-    .from(schema.categories)
-    .leftJoin(
-      schema.actionItems,
-      eq(schema.categories.id, schema.actionItems.categoryId)
-    )
-    .leftJoin(
-      schema.nextSteps,
-      eq(schema.actionItems.id, schema.nextSteps.actionItemId)
-    )
-    .where(eq(schema.categories.userId, userId))
-    .orderBy(
-      desc(schema.actionItems.createdAt),
-      schema.categories.name,
-      schema.actionItems.id,
-      schema.nextSteps.id
-    );
-
-  // Process data (similar to dashboard)
-  const actionItemsFormatted: CategoryWithItems[] = [];
-  const categoryMap = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      items: Map<
-        string,
-        { id: string; actionItem: string; nextSteps: Map<string, NextStepDetail> }
-      >;
-    }
-  >();
-
-  for (const row of userCategories) {
-    if (!row.categoryId) continue;
-    let category = categoryMap.get(row.categoryId);
-    if (!category) {
-      category = { id: row.categoryId, name: row.categoryName!, items: new Map() };
-      categoryMap.set(row.categoryId, category);
-    }
-    if (row.actionItemId) {
-      let actionItem = category.items.get(row.actionItemId);
-      if (!actionItem) {
-        actionItem = {
-          id: row.actionItemId,
-          actionItem: row.actionItemText!,
-          nextSteps: new Map(),
-        };
-        category.items.set(row.actionItemId, actionItem);
-      }
-      if (row.nextStepId && row.nextStepText !== null) {
-        if (!actionItem.nextSteps.has(row.nextStepId)) {
-          actionItem.nextSteps.set(row.nextStepId, {
-            id: row.nextStepId,
-            text: row.nextStepText,
-            completed: row.nextStepCompleted!,
-          });
-        }
-      }
-    }
-  }
-
-  categoryMap.forEach((categoryData) => {
-    const itemsArray: ActionItemWithNextSteps[] = [];
-    categoryData.items.forEach((itemData) => {
-      const nextStepsArray = Array.from(itemData.nextSteps.values());
-      itemsArray.push({
-        actionItemId: itemData.id, // Keep ID here for internal processing
-        actionItem: itemData.actionItem,
-        nextSteps: nextStepsArray, // Pass the full details internally
-      });
-    });
-    actionItemsFormatted.push({
-      id: categoryData.id, // Keep ID here for internal processing
-      name: categoryData.name,
-      items: itemsArray,
-    });
-  });
-  actionItemsFormatted.sort((a, b) => a.name.localeCompare(b.name));
-  return actionItemsFormatted;
-}
+const PROMPT_TEMPLATE = "You are a productivity assistant specializing in refining to-do lists.\n" +
+  "Analyze the following JSON data representing a user's current categories, action items, and next steps.\n" +
+  "Your goal is to consolidate categories where logical (merge similar themes), refine action item wording for clarity and conciseness, and ensure action items are grouped under the most appropriate category.\n\n" +
+  "Return a revised structure as a valid JSON object containing ONLY the proposed list structure under the key \"proposedStructure\" AND a textual summary of the key changes made under the key \"changeSummary\".\n\n" +
+  "IMPORTANT:\n" +
+  "- The output MUST be ONLY the JSON object, with no markdown formatting, backticks, or any surrounding text.\n" +
+  "- The structure of the JSON object must strictly follow this format:\n" +
+  "  {\n" +
+  "    \"proposedStructure\": [\n" +
+  "      {\n" +
+  "        \"name\": \"string (refined category name)\",\n" +
+  "        \"items\": [\n" +
+  "          {\n" +
+  "            \"actionItem\": \"string (refined action item text)\",\n" +
+  "            \"nextSteps\": [\"string (original next step text)\"]\n" +
+  "          }\n" +
+  "        ]\n" +
+  "      }\n" +
+  "    ],\n" +
+  "    \"changeSummary\": \"string (A concise summary of changes, e.g., 'Merged 'X' and 'Y' categories, renamed item 'Z'.')\"\n" +
+  "  }\n" +
+  "- Do NOT include IDs in your proposed structure. Focus on names, items, and steps.\n" +
+  "- If you merge categories or move action items, reflect that in the new structure and mention it in the summary.\n" +
+  "- If the input list is empty or has no clear actions, return: {\"proposedStructure\": [], \"changeSummary\": \"No changes suggested as the list is empty.\"}\n\n" +
+  "Current List Data:\n" +
+  "```json\n" +
+  "__LIST_DATA__\n" +
+  "```\n\n" +
+  "Refined List JSON Output (including summary):\n";
 
 // Helper to format data specifically for the Gemini prompt (removing IDs, simplifying next steps)
-function formatDataForPrompt(data: CategoryWithItems[]): PromptCategory[] {
+function formatDataForPrompt(data: FormattedCategoryData[]): PromptCategory[] {
     return data.map(category => ({
         name: category.name,
         items: category.items.map(item => ({
             actionItem: item.actionItem,
             // Extract just the text for the prompt as requested
-            nextSteps: item.nextSteps.map(ns => ns.text)
+            nextSteps: item.nextSteps
         }))
     }));
 }
@@ -227,7 +104,7 @@ export async function POST() {
      }
 
      // Fetch and format the current user data (full details)
-     const currentDataFull = await fetchAndFormatData(userId);
+     const currentDataFull = await getFormattedActionItems(userId);
 
      if (currentDataFull.length === 0) {
        return NextResponse.json({ proposedStructure: [], changeSummary: "No changes suggested as the list is empty." }); // Return empty if no data
@@ -286,4 +163,4 @@ export async function POST() {
      console.error('Error refining list:', error.stack || error.message);
      return NextResponse.json({ error: 'Failed to refine list', details: error.message }, { status: 500 });
    }
-} 
+}

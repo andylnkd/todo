@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import PomodoroTimer from './PomodoroTimer';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 
 interface TaskItemProps {
   task: {
