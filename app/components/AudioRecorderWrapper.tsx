@@ -20,7 +20,7 @@ export default function AudioRecorderWrapper({ onTranscriptProcessed }: AudioRec
     setError('');
     
     const formData = new FormData();
-    formData.append('audio', blob, 'recording.webm');
+    formData.append('file', blob, 'recording.webm');
 
     try {
       // 1. Get Transcription
@@ -32,7 +32,7 @@ export default function AudioRecorderWrapper({ onTranscriptProcessed }: AudioRec
       const transcribeData = await transcribeResponse.json();
       if (!transcribeResponse.ok) throw new Error(transcribeData.error || 'Failed to transcribe audio');
       
-      const transcriptText = transcribeData.text;
+      const transcriptText = transcribeData.transcript;
       
       // 2. Call the provided callback with the transcript
       await onTranscriptProcessed(transcriptText);
