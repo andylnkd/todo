@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import SurpriseMeButton from '@/app/components/SurpriseMeButton';
 
 export default async function Home() {
   const { userId } = await auth();
@@ -48,6 +49,12 @@ export default async function Home() {
             )}
           </CardContent>
         </Card>
+
+        {/* Surprise Me Button */}
+        <div className="mt-8">
+          <SurpriseMeButton />
+        </div>
+
       </div>
     </div>
   );
