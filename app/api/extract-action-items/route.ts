@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { FLAT_EXTRACTION_PROMPT } from '@/app/server-actions/transcriptActions';
 
 // Ensure the API key is available
 if (!process.env.GEMINI_API_KEY) {

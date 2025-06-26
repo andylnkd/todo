@@ -4,6 +4,7 @@ import { db } from '@/drizzle/db';
 import { categories, actionItems, nextSteps } from '@/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { CATEGORY_MERGE_PROMPT } from '@/app/server-actions/transcriptActions';
 
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
