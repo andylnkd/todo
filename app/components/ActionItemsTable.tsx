@@ -8,7 +8,7 @@ import EditableTextItem from './EditableTextItem'; // Import the renamed compone
 import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown, X, Merge, Sparkles, Trash2, Mic, Plus, CalendarIcon, Timer } from 'lucide-react';
+import { Search, ArrowUpDown, X, Merge, Sparkles, Trash2, Mic, Plus, CalendarIcon, Timer, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -63,6 +63,7 @@ interface ActionItemsTableProps {
   onDeleteActionItem: (id: string) => Promise<void>;
   onAddCategory: (name: string) => Promise<string | null>;
   onDeleteCategory: (id: string) => Promise<void>;
+  isDailyView?: boolean;
 }
 
 type SortOption = 'dueDate' | 'name' | 'recent';
@@ -78,9 +79,11 @@ interface ActionItemRowProps {
   setEnhanceModalOpen: (open: boolean) => void;
   handleSaveNextStep: (id: string, newText: string, newCompleted: boolean, newDueDate: Date | null) => Promise<void>;
   handleDeleteNextStep: (id: string) => Promise<void>;
+  isDailyItem?: boolean;
+  onConvertToRegular?: (id: string) => Promise<void>;
 }
 
-function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleDeleteActionItem, setEnhanceTarget, setEnhanceModalOpen, handleSaveNextStep, handleDeleteNextStep }: ActionItemRowProps) {
+function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleDeleteActionItem, setEnhanceTarget, setEnhanceModalOpen, handleSaveNextStep, handleDeleteNextStep, isDailyItem, onConvertToRegular }: ActionItemRowProps) {
   const [dueDate, setDueDate] = React.useState<Date | null>(item.dueDate ? new Date(item.dueDate) : null);
   const [isSavingDueDate, setIsSavingDueDate] = React.useState(false);
   const [showTimer, setShowTimer] = React.useState(false);
@@ -183,6 +186,23 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
             <p>{showTimer ? 'Hide' : 'Start'} Pomodoro Timer</p>
           </TooltipContent>
         </Tooltip>
+        {isDailyItem && onConvertToRegular && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-blue-600 hover:text-blue-700"
+                onClick={() => onConvertToRegular(item.actionItemId)}
+              >
+                <ArrowRight className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Convert to Regular Todo</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -214,7 +234,7 @@ function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleD
   );
 }
 
-const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory }) => {
+const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory, isDailyView = false }) => {
   const router = useRouter();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -598,6 +618,38 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     }
   };
 
+  // Add this function to handle converting daily items to regular
+  const handleConvertToRegular = async (actionItemId: string) => {
+    try {
+      const response = await fetch('/api/action-items/convert-to-regular', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ actionItemId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to convert item');
+      }
+
+      toast({
+        title: "Success",
+        description: "Item converted to regular todo successfully!",
+      });
+
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to convert item to regular:', error);
+      toast({
+        title: "Error",
+        description: "Failed to convert item to regular todo.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Quick Add Controls at the Top */}
@@ -892,6 +944,8 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                         setEnhanceModalOpen={setEnhanceModalOpen}
                         handleSaveNextStep={handleSaveNextStep}
                         handleDeleteNextStep={handleDeleteNextStep}
+                        isDailyItem={isDailyView}
+                        onConvertToRegular={isDailyView ? handleConvertToRegular : undefined}
                       />
                     ))}
                   </div>
@@ -973,6 +1027,8 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                         setEnhanceModalOpen={setEnhanceModalOpen}
                         handleSaveNextStep={handleSaveNextStep}
                         handleDeleteNextStep={handleDeleteNextStep}
+                        isDailyItem={isDailyView}
+                        onConvertToRegular={isDailyView ? handleConvertToRegular : undefined}
                       />
                     ))}
                   </div>

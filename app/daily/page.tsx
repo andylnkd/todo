@@ -284,6 +284,7 @@ export default async function DailyPage() {
                   onDeleteActionItem={deleteActionItem}
                   onAddCategory={addCategory}
                   onDeleteCategory={deleteCategory}
+                  isDailyView={true}
                 />
               </CardContent>
             </Card>
