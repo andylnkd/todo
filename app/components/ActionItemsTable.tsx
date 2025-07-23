@@ -83,156 +83,7 @@ interface ActionItemRowProps {
   onConvertToRegular?: (id: string) => Promise<void>;
 }
 
-function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, handleDeleteActionItem, setEnhanceTarget, setEnhanceModalOpen, handleSaveNextStep, handleDeleteNextStep, isDailyItem, onConvertToRegular }: ActionItemRowProps) {
-  const [dueDate, setDueDate] = React.useState<Date | null>(item.dueDate ? new Date(item.dueDate) : null);
-  const [isSavingDueDate, setIsSavingDueDate] = React.useState(false);
-  const [showTimer, setShowTimer] = React.useState(false);
-  const [pomodoroCount, setPomodoroCount] = React.useState(0);
-
-  const handleDueDateChange = async (date: Date | null) => {
-    setDueDate(date);
-    setIsSavingDueDate(true);
-    try {
-      await onSaveActionItem(item.actionItemId, item.actionItem, date);
-    } finally {
-      setIsSavingDueDate(false);
-    }
-  };
-
-  const handlePomodoroComplete = () => {
-    setPomodoroCount(count => count + 1);
-    setShowTimer(false);
-  };
-
-  return (
-    <div className={cn(
-      "space-y-2 p-3 rounded-lg border transition-colors",
-      isSelected && "bg-secondary/30 border-secondary"
-    )}>
-      <div className="flex flex-wrap items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center">
-              <Checkbox
-                id={`select-${item.actionItemId}`}
-                checked={isSelected}
-                onCheckedChange={() => toggleItem(item.actionItemId)}
-                className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Select for sharing</p>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-primary"
-              onClick={() => {
-                setEnhanceTarget({ id: item.actionItemId, type: 'actionItem' });
-                setEnhanceModalOpen(true);
-              }}
-            >
-              <Mic className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Enhance with Audio</p>
-          </TooltipContent>
-        </Tooltip>
-        <div className="flex-1 min-w-[150px]">
-          <EditableTextItem
-            id={item.actionItemId}
-            initialText={item.actionItem}
-            onSave={onSaveActionItem}
-            itemTypeLabel="Action Item"
-          />
-        </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={isSavingDueDate}>
-              <CalendarIcon className="h-4 w-4" />
-              {dueDate && <span className="ml-1 text-xs">{format(dueDate, 'MMM d')}</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="end">
-            <Calendar
-              mode="single"
-              selected={dueDate || undefined}
-              onSelect={(date: Date | undefined) => handleDueDateChange(date || null)}
-              disabled={isSavingDueDate}
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowTimer(!showTimer)}
-              className={cn("h-6 gap-1", showTimer && "bg-secondary")}
-            >
-              <Timer className="h-3 w-3" />
-              {pomodoroCount > 0 && (
-                <span className="text-xs">{pomodoroCount}</span>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{showTimer ? 'Hide' : 'Start'} Pomodoro Timer</p>
-          </TooltipContent>
-        </Tooltip>
-        {isDailyItem && onConvertToRegular && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-blue-600 hover:text-blue-700"
-                onClick={() => onConvertToRegular(item.actionItemId)}
-              >
-                <ArrowRight className="h-3 w-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Convert to Regular Todo</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-destructive"
-          onClick={() => handleDeleteActionItem(item.actionItemId)}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-      {showTimer && (
-        <div className="flex justify-center pt-2">
-          <PomodoroTimer onComplete={handlePomodoroComplete} />
-        </div>
-      )}
-      <div className="space-y-2 pl-7">
-        {item.nextSteps.map((nextStep) => (
-          <EditableNextStep
-            key={nextStep.id}
-            id={nextStep.id}
-            initialText={nextStep.text}
-            initialCompleted={nextStep.completed}
-            initialDueDate={nextStep.dueDate ? new Date(nextStep.dueDate) : null}
-            onSave={handleSaveNextStep}
-            onDelete={handleDeleteNextStep}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
+import { CategoryAccordionItem } from './CategoryAccordionItem';
 
 const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory, isDailyView = false }) => {
   const router = useRouter();
@@ -253,6 +104,12 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [quickInputText, setQuickInputText] = useState('');
   const [quickActionItemText, setQuickActionItemText] = useState('');
+
+  const [optimisticCategories, setOptimisticCategories] = useState(categories);
+
+  useEffect(() => {
+    setOptimisticCategories(categories);
+  }, [categories]);
 
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
@@ -433,7 +290,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
 
   // Sort categories based on selected sort option
   const sortedCategories = useMemo(() => {
-    const categoriesToSort = [...(searchQuery.trim() ? searchResults : categories)];
+    const categoriesToSort = [...(searchQuery.trim() ? searchResults : optimisticCategories)];
     
     switch (sortBy) {
       case 'dueDate':
@@ -594,6 +451,17 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
 
   // Add this function to handle category completion
   const handleCategoryComplete = async (categoryId: string, completed: boolean) => {
+    const originalCategories = optimisticCategories;
+    const newCategories = optimisticCategories.map(c => 
+      c.id === categoryId ? { ...c, status: completed ? 'completed' : 'active' } : c
+    );
+    setOptimisticCategories(newCategories);
+
+    toast({
+      title: "Success",
+      description: `Category marked as ${completed ? 'complete' : 'active'}.`,
+    });
+
     try {
       const response = await fetch('/api/categories/complete', {
         method: 'POST',
@@ -607,12 +475,46 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
         throw new Error('Failed to update category completion status');
       }
 
-      router.refresh(); // Refresh to show changes
+      router.refresh();
     } catch (error) {
+      setOptimisticCategories(originalCategories);
       console.error('Failed to update category completion:', error);
       toast({
         title: "Error",
         description: "Failed to update category completion status.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConvertCategoryToRegular = async (categoryId: string) => {
+    try {
+      const response = await fetch('/api/categories/convert-to-regular', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ categoryId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to convert category items');
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: "Success",
+        description: `${result.convertedCount} items converted to regular todos!`,
+      });
+
+      router.refresh(); // Refresh to show changes
+    } catch (error) {
+      console.error('Failed to convert category to regular:', error);
+      toast({
+        title: "Error",
+        description: "Failed to convert category items to regular todos.",
         variant: "destructive",
       });
     }
@@ -882,75 +784,25 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
           {activeCategories.map((category) => {
             const emoji = categoryEmojis[category.id];
             return (
-              <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
-                <div className="flex items-center px-4 py-2">
-                  <Checkbox
-                    checked={category.status === 'completed'}
-                    onCheckedChange={(checked: boolean) => handleCategoryComplete(category.id, checked)}
-                    className="mr-2"
-                  />
-                  <AccordionTrigger className="flex-1 flex items-center text-left">
-                    <span>{emoji}</span>
-                    <span className="font-medium ml-2">{category.name}</span>
-                  </AccordionTrigger>
-                  <div className="flex items-center gap-2 ml-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-primary"
-                          onClick={() => {
-                            setEnhanceTarget({ id: category.id, type: 'category' });
-                            setEnhanceModalOpen(true);
-                          }}
-                        >
-                          <Mic className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Enhance Category with Audio</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={() => handleDeleteCategory(category.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <AccordionContent className="px-4 pb-4">
-                  <div className="mb-4">
-                    <EditableTextItem
-                      id={category.id}
-                      initialText={category.name}
-                      onSave={handleSaveCategory}
-                      itemTypeLabel="Category"
-                    />
-                  </div>
-                  <div className="space-y-4">
-                    {category.items.map((item) => (
-                      <ActionItemRow
-                        key={item.actionItemId}
-                        item={item}
-                        isSelected={isSelected(item.actionItemId)}
-                        onSaveActionItem={handleSaveActionItem}
-                        toggleItem={toggleItem}
-                        handleDeleteActionItem={handleDeleteActionItem}
-                        setEnhanceTarget={setEnhanceTarget}
-                        setEnhanceModalOpen={setEnhanceModalOpen}
-                        handleSaveNextStep={handleSaveNextStep}
-                        handleDeleteNextStep={handleDeleteNextStep}
-                        isDailyItem={isDailyView}
-                        onConvertToRegular={isDailyView ? handleConvertToRegular : undefined}
-                      />
-                    ))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
+              <CategoryAccordionItem
+                key={category.id}
+                category={category}
+                emoji={emoji}
+                isSelected={isSelected}
+                toggleItem={toggleItem}
+                handleSaveCategory={handleSaveCategory}
+                handleSaveActionItem={handleSaveActionItem}
+                handleDeleteActionItem={handleDeleteActionItem}
+                setEnhanceTarget={setEnhanceTarget}
+                setEnhanceModalOpen={setEnhanceModalOpen}
+                handleSaveNextStep={handleSaveNextStep}
+                handleDeleteNextStep={handleDeleteNextStep}
+                isDailyView={isDailyView}
+                handleConvertToRegular={handleConvertToRegular}
+                handleConvertCategoryToRegular={handleConvertCategoryToRegular}
+                handleDeleteCategory={handleDeleteCategory}
+                handleCategoryComplete={handleCategoryComplete}
+              />
             );
           })}
         </Accordion>
@@ -965,75 +817,25 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
           {completedCategories.map((category) => {
             const emoji = categoryEmojis[category.id];
             return (
-              <AccordionItem key={category.id} value={category.id} className="border rounded-lg opacity-60">
-                <div className="flex items-center px-4 py-2">
-                  <Checkbox
-                    checked={category.status === 'completed'}
-                    onCheckedChange={(checked: boolean) => handleCategoryComplete(category.id, checked)}
-                    className="mr-2"
-                  />
-                  <AccordionTrigger className="flex-1 flex items-center text-left">
-                    <span>{emoji}</span>
-                    <span className="font-medium ml-2">{category.name}</span>
-                  </AccordionTrigger>
-                  <div className="flex items-center gap-2 ml-2">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-primary"
-                          onClick={() => {
-                            setEnhanceTarget({ id: category.id, type: 'category' });
-                            setEnhanceModalOpen(true);
-                          }}
-                        >
-                          <Mic className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Enhance Category with Audio</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={() => handleDeleteCategory(category.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <AccordionContent className="px-4 pb-4">
-                  <div className="mb-4">
-                    <EditableTextItem
-                      id={category.id}
-                      initialText={category.name}
-                      onSave={handleSaveCategory}
-                      itemTypeLabel="Category"
-                    />
-                  </div>
-                  <div className="space-y-4">
-                    {category.items.map((item) => (
-                      <ActionItemRow
-                        key={item.actionItemId}
-                        item={item}
-                        isSelected={isSelected(item.actionItemId)}
-                        onSaveActionItem={handleSaveActionItem}
-                        toggleItem={toggleItem}
-                        handleDeleteActionItem={handleDeleteActionItem}
-                        setEnhanceTarget={setEnhanceTarget}
-                        setEnhanceModalOpen={setEnhanceModalOpen}
-                        handleSaveNextStep={handleSaveNextStep}
-                        handleDeleteNextStep={handleDeleteNextStep}
-                        isDailyItem={isDailyView}
-                        onConvertToRegular={isDailyView ? handleConvertToRegular : undefined}
-                      />
-                    ))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
+              <CategoryAccordionItem
+                key={category.id}
+                category={category}
+                emoji={emoji}
+                isSelected={isSelected}
+                toggleItem={toggleItem}
+                handleSaveCategory={handleSaveCategory}
+                handleSaveActionItem={handleSaveActionItem}
+                handleDeleteActionItem={handleDeleteActionItem}
+                setEnhanceTarget={setEnhanceTarget}
+                setEnhanceModalOpen={setEnhanceModalOpen}
+                handleSaveNextStep={handleSaveNextStep}
+                handleDeleteNextStep={handleDeleteNextStep}
+                isDailyView={isDailyView}
+                handleConvertToRegular={handleConvertToRegular}
+                handleConvertCategoryToRegular={handleConvertCategoryToRegular}
+                handleDeleteCategory={handleDeleteCategory}
+                handleCategoryComplete={handleCategoryComplete}
+              />
             );
           })}
         </Accordion>
