@@ -2,14 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation'; // For refreshing data after update
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Accordion } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
-import EditableTextItem from './EditableTextItem'; // Import the renamed component
-import EditableNextStep from './EditableNextStep'; // Import the new component
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { Search, ArrowUpDown, X, Merge, Sparkles, Trash2, Mic, Plus, CalendarIcon, Timer, ArrowRight } from 'lucide-react';
-import { format } from 'date-fns';
+import { Search, ArrowUpDown, X, Merge, Sparkles, Plus } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -19,15 +16,11 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from '@/components/ui/checkbox';
 import { useSelectedItems } from '../context/SelectedItemsContext';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import AudioRecorderWrapper from './AudioRecorderWrapper';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import PomodoroTimer from './PomodoroTimer';
 import { getEmojiForCategory } from '@/lib/utils'; // Import the function
 
 // Move the ActionItemWithNextSteps type definition here for use in ActionItemRow
@@ -68,20 +61,7 @@ interface ActionItemsTableProps {
 
 type SortOption = 'dueDate' | 'name' | 'recent';
 
-// Add this new child component above the main ActionItemsTable component
-interface ActionItemRowProps {
-  item: ActionItemWithNextSteps;
-  isSelected: boolean;
-  onSaveActionItem: (id: string, newText: string, newDueDate?: Date | null) => Promise<void>;
-  toggleItem: (id: string) => void;
-  handleDeleteActionItem: (id: string) => void;
-  setEnhanceTarget: (target: { id: string, type: 'actionItem' | 'category' }) => void;
-  setEnhanceModalOpen: (open: boolean) => void;
-  handleSaveNextStep: (id: string, newText: string, newCompleted: boolean, newDueDate: Date | null) => Promise<void>;
-  handleDeleteNextStep: (id: string) => Promise<void>;
-  isDailyItem?: boolean;
-  onConvertToRegular?: (id: string) => Promise<void>;
-}
+
 
 import { CategoryAccordionItem } from './CategoryAccordionItem';
 
@@ -319,7 +299,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
       default:
         return categoriesToSort;
     }
-  }, [categories, searchResults, searchQuery, sortBy]);
+  }, [optimisticCategories, searchResults, searchQuery, sortBy]);
 
   const handleItemSelect = (itemId: string) => {
     setSelectedItems(prev => 
