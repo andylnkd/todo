@@ -3,12 +3,12 @@ import { auth } from '@clerk/nextjs/server';
 import { processExtractedItemsAndSave } from '@/app/server-actions/transcriptActions';
 
 interface RequestBody {
-    items: {
-        category: string;
-        actionItem: string;
-        nextSteps: string[];
+    items: string[] | {
+      category?: string;
+      actionItem: string;
+      nextSteps?: string[];
     }[];
-    itemType: 'regular' | 'daily';
+    itemType?: 'regular' | 'daily';
 }
 
 export async function POST(req: NextRequest) {
@@ -25,12 +25,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid items format. Expected an array.' }, { status: 400 });
     }
 
-    // The processExtractedItemsAndSave expects a simple array of strings.
-    // We will need to decide how to handle the structured data.
-    // For now, let's just extract the actionItem text and use a default category name.
-    const actionItemTexts = items.map(item => item.actionItem);
+    const actionItemTexts = items
+      .map((item) => (typeof item === 'string' ? item : item.actionItem))
+      .filter((text): text is string => typeof text === 'string' && text.trim().length > 0);
+
+    if (actionItemTexts.length === 0) {
+      return NextResponse.json({ error: 'No valid extracted items provided.' }, { status: 400 });
+    }
     
-    const result = await processExtractedItemsAndSave({ items: actionItemTexts, userId, categoryName: 'Extracted Items' });
+    const categoryName = body.itemType === 'daily' ? 'Daily Extracted Items' : 'Extracted Items';
+    const result = await processExtractedItemsAndSave({ items: actionItemTexts, userId, categoryName });
     return NextResponse.json(result);
 
   } catch (err) {

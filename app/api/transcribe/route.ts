@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-if (!OPENAI_API_KEY) {
-    console.error('OpenAI API key is not set.');
-}
-
-const openai = new OpenAI({
-    apiKey: OPENAI_API_KEY!,
-});
+import { auth } from '@clerk/nextjs/server';
 
 // Add CORS headers helper function
 function corsHeaders() {
@@ -26,11 +17,18 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
-    if (!OPENAI_API_KEY) {
+    const { userId } = await auth();
+    if (!userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders() });
+    }
+
+    const openAIKey = process.env.OPENAI_API_KEY;
+    if (!openAIKey) {
         return NextResponse.json({ error: 'OpenAI API key not configured.' }, { status: 500 });
     }
 
     try {
+        const openai = new OpenAI({ apiKey: openAIKey });
         const formData = await req.formData();
         const file = formData.get('file');
 

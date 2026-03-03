@@ -1,46 +1,18 @@
-// This file contains server-side actions/logic related to transcript processing.
-
-// Defensive check for required environment variable
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('[transcriptActions] GEMINI_API_KEY environment variable is not set!');
-}
+import 'server-only';
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from '../../drizzle/db'; 
 import * as schema from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { TASK_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
-export const TASK_EXTRACTION_PROMPT = `
-You are a task extraction assistant. Your job is to analyze the given input and:
-1. Extract actionable items
-2. Group them by logical categories/themes
-3. For each action item, provide specific, concrete next steps
-
-IMPORTANT: Your response MUST be a valid JSON object with NO markdown formatting or additional text.
-Use this exact structure:
-{
-  "categories": [
-    {
-      "name": "string",
-      "items": [
-        {
-          "actionItem": "string",
-          "nextSteps": ["string"]
-        }
-      ]
-    }
-  ]
+function getGenAI(): GoogleGenerativeAI {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    throw new Error('[transcriptActions] GEMINI_API_KEY environment variable is not set');
+  }
+  return new GoogleGenerativeAI(geminiKey);
 }
-
-REQUIREMENTS:
-- Return ONLY the JSON object, no other text or formatting
-- No markdown code blocks, no backticks
-- Each category must have at least one action item
-- Each action item must have at least one next step
-- If no action items found, return {"categories": []}
-`;
 
 interface ActionItemForDB { 
   actionItem: string;
@@ -83,7 +55,7 @@ export async function processTranscriptAndSave({
   }
 
   // 2. Process with AI
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
   const result = await model.generateContent([TASK_EXTRACTION_PROMPT, transcript]);
   const response = await result.response;
   let aiResponseText = response.text();
@@ -171,7 +143,7 @@ export async function processImageAndSave({
   itemType: 'daily' | 'regular';
 }) {
   // The Gemini SDK can handle the blob directly, no need for buffer/upload dance for this model.
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const prompt = TASK_EXTRACTION_PROMPT;
   
@@ -239,7 +211,7 @@ export async function enhanceActionItem({
   const prompt = `You are an assistant helping to update a task.\nCurrent description: ${item.actionItem}\nCurrent next steps: ${nextSteps.map(ns => ns.step).join('; ')}\nNew user input: ${transcript}\nPlease return an updated description and next steps that incorporate the new information.\nReturn as JSON: {"description": string, "nextSteps": string[]}`;
 
   // 3. Call LLM
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
   const result = await model.generateContent([prompt]);
   const response = await result.response;
   let aiResponseText = response.text();
@@ -308,7 +280,7 @@ export async function enhanceCategory({
   const prompt = `You are an assistant helping to update a category of tasks.\nCurrent category name: ${category.name}\nCurrent items: ${items.map(i => i.actionItem).join('; ')}\nNew user input: ${transcript}\nPlease return an updated category name (if needed), and an updated list of items that incorporate the new information.\nReturn as JSON: {"categoryName": string, "items": string[]}`;
 
   // 3. Call LLM
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
   const result = await model.generateContent([prompt]);
   const response = await result.response;
   let aiResponseText = response.text();
@@ -432,23 +404,3 @@ export async function processExtractedItemsAndSave({
     await db.insert(schema.actionItems).values(actionItemsToInsert);
   }
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const FLAT_EXTRACTION_PROMPT = `
-You are a task extraction assistant. Your job is to analyze the given input and:
-1. Extract actionable items
-2. Return ONLY a flat JSON array of action item strings.
-
-IMPORTANT: Your response MUST be a valid JSON array with NO markdown formatting or additional text.
-Example: ["Send email to John", "Follow up on the report"]
-If no action items found, return an empty array [].
-`;
-
-export const CATEGORY_MERGE_PROMPT = `
-I have {numCategories} categories to merge. Please suggest a concise, descriptive name for the combined category.
-
-Categories:
-{categoriesList}
-
-Return ONLY the suggested name, nothing else.
-`;

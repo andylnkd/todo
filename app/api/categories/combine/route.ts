@@ -4,10 +4,7 @@ import { db } from '@/drizzle/db';
 import { categories, actionItems, nextSteps } from '@/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { CATEGORY_MERGE_PROMPT } from '@/app/server-actions/transcriptActions';
-
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+import { CATEGORY_MERGE_PROMPT } from '@/app/lib/ai-prompts';
 
 // Define merge modes
 type MergeMode = 'smart' | 'simple' | 'custom';
@@ -61,13 +58,21 @@ export async function POST(req: Request) {
         ? actionItemsToMove.filter(item => selectedItemIds.includes(item.id))
         : actionItemsToMove;
 
+      if (mode === 'custom' && filteredItems.length === 0) {
+        return new NextResponse('At least one action item must be selected for custom merge', { status: 400 });
+      }
+
       // Determine the new category name
       let newCategoryName = 'Merged Category';
       
       if (mode === 'smart') {
         // Use AI to suggest a name
         try {
-          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+          const geminiKey = process.env.GEMINI_API_KEY;
+          if (!geminiKey) {
+            throw new Error('GEMINI_API_KEY not configured');
+          }
+          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: "gemini-2.0-flash" });
           const prompt = CATEGORY_MERGE_PROMPT
             .replace('{numCategories}', categoriesToMerge.length.toString())
             .replace('{categoriesList}', categoriesToMerge.map(cat => `- ${cat.name}`).join('\n'));
@@ -98,11 +103,13 @@ export async function POST(req: Request) {
 
       // Move all action items to the new category
       if (filteredItems.length > 0) {
+        const filteredItemIds = filteredItems.map(item => item.id);
+
         // First, fetch all next steps for these action items
         const nextStepsToMove = await tx
           .select()
           .from(nextSteps)
-          .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
+          .where(inArray(nextSteps.actionItemId, filteredItemIds));
 
         // Create a map of old action item IDs to their next steps
         const nextStepsMap = new Map<string, typeof nextStepsToMove>();
@@ -110,9 +117,10 @@ export async function POST(req: Request) {
           nextStepsMap.set(item.id, nextStepsToMove.filter(step => step.actionItemId === item.id));
         });
 
-        // Insert new action items and get their IDs
-        const newActionItems = await tx.insert(actionItems).values(
-          filteredItems.map(item => ({
+        // Insert new action items and maintain an exact old->new ID map.
+        const newActionItemIdByOldId = new Map<string, string>();
+        for (const item of filteredItems) {
+          const [newActionItem] = await tx.insert(actionItems).values({
             actionItem: item.actionItem,
             categoryId: newCategory.id,
             userId,
@@ -121,21 +129,25 @@ export async function POST(req: Request) {
             type: item.type,
             createdAt: new Date(),
             updatedAt: new Date()
-          }))
-        ).returning();
+          }).returning({ id: actionItems.id });
+          if (!newActionItem?.id) {
+            throw new Error(`Failed to create merged action item for source item ${item.id}`);
+          }
+          newActionItemIdByOldId.set(item.id, newActionItem.id);
+        }
 
         // Insert next steps for the new action items
         if (nextStepsToMove.length > 0) {
           await tx.insert(nextSteps).values(
-            newActionItems.flatMap((newItem: typeof newActionItems[0]) => {
-              const oldItem = filteredItems.find(item => item.actionItem === newItem.actionItem);
-              if (!oldItem) return [];
-              
-              const oldNextSteps = nextStepsMap.get(oldItem.id) || [];
+            filteredItems.flatMap((oldItem) => {
+              const newActionItemId = newActionItemIdByOldId.get(oldItem.id);
+              if (!newActionItemId) return [];
+
+              const oldNextSteps = nextStepsMap.get(oldItem.id) ?? [];
               return oldNextSteps.map(step => ({
                 step: step.step,
                 completed: step.completed,
-                actionItemId: newItem.id,
+                actionItemId: newActionItemId,
                 userId,
                 createdAt: new Date(),
                 updatedAt: new Date()
@@ -146,22 +158,37 @@ export async function POST(req: Request) {
 
         // Delete old next steps
         await tx.delete(nextSteps)
-          .where(inArray(nextSteps.actionItemId, filteredItems.map(item => item.id)));
+          .where(inArray(nextSteps.actionItemId, filteredItemIds));
 
-        // Delete old action items
+        // Delete only the action items that were actually merged.
         await tx.delete(actionItems)
+          .where(and(
+            eq(actionItems.userId, userId),
+            inArray(actionItems.id, filteredItemIds)
+          ));
+      }
+
+      // In custom mode, keep categories that still have remaining items.
+      let categoryIdsToDelete = categoryIds;
+      if (mode === 'custom') {
+        const remainingItems = await tx
+          .select({ categoryId: actionItems.categoryId })
+          .from(actionItems)
           .where(and(
             eq(actionItems.userId, userId),
             inArray(actionItems.categoryId, categoryIds)
           ));
+        const remainingCategoryIds = new Set(remainingItems.map(item => item.categoryId));
+        categoryIdsToDelete = categoryIds.filter((categoryId) => !remainingCategoryIds.has(categoryId));
       }
 
-      // Finally, delete the original categories
-      await tx.delete(categories)
-        .where(and(
-          eq(categories.userId, userId),
-          inArray(categories.id, categoryIds)
-        ));
+      if (categoryIdsToDelete.length > 0) {
+        await tx.delete(categories)
+          .where(and(
+            eq(categories.userId, userId),
+            inArray(categories.id, categoryIdsToDelete)
+          ));
+      }
 
       return NextResponse.json({ 
         success: true, 

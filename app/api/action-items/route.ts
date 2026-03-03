@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../drizzle/db';
-import { actionItems } from '../../../drizzle/schema';
+import { actionItems, categories } from '../../../drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 
 
@@ -28,7 +28,18 @@ export async function PATCH(request: NextRequest) {
       updatedAt: new Date()
     };
     if (actionItem) updateData.actionItem = actionItem;
-    if (categoryId) updateData.categoryId = categoryId;
+    if (categoryId) {
+      const [targetCategory] = await db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(and(eq(categories.id, categoryId), eq(categories.userId, userId)))
+        .limit(1);
+
+      if (!targetCategory) {
+        return NextResponse.json({ error: 'Invalid category or unauthorized category access' }, { status: 403 });
+      }
+      updateData.categoryId = categoryId;
+    }
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
     console.log('Updating action item:', { id, actionItem, categoryId, dueDate });
 

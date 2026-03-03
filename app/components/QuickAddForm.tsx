@@ -7,6 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getEmojiForCategory } from '@/lib/utils';
+import {
+  addCategory as dashboardAddCategory,
+  addActionItem as dashboardAddActionItem,
+} from '@/app/server-actions/dashboardActions';
+import {
+  addCategory as dailyAddCategory,
+  addActionItem as dailyAddActionItem,
+} from '@/app/server-actions/dailyActions';
 
 // Define Category structure locally for this component's props
 interface Category {
@@ -17,12 +25,15 @@ interface Category {
 // Define props for the new component
 interface QuickAddFormProps {
   categories: Category[];
-  onAddCategory: (name: string) => Promise<string | null>;
-  onAddActionItem: (categoryId: string, text: string) => Promise<void>;
-  onClose: () => void; // Function to close the form view
+  onClose: () => void;
+  variant?: 'dashboard' | 'daily';
 }
 
-export default function QuickAddForm({ categories, onAddCategory, onAddActionItem, onClose }: QuickAddFormProps) {
+export default function QuickAddForm({ categories, onClose, variant = 'dashboard' }: QuickAddFormProps) {
+  const isDaily = variant === 'daily';
+  const addCategory = isDaily ? dailyAddCategory : dashboardAddCategory;
+  const addActionItem = isDaily ? dailyAddActionItem : dashboardAddActionItem;
+  
   const { toast } = useToast();
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -32,13 +43,13 @@ export default function QuickAddForm({ categories, onAddCategory, onAddActionIte
     try {
       if (selectedCategoryId === '__new__') {
         if (!newCategoryName.trim() || !actionItemText.trim()) return;
-        const newCategoryId = await onAddCategory(newCategoryName);
+        const newCategoryId = await addCategory(newCategoryName);
         if (newCategoryId) {
-          await onAddActionItem(newCategoryId, actionItemText);
+          await addActionItem(newCategoryId, actionItemText);
         }
       } else if (selectedCategoryId) {
         if (!actionItemText.trim()) return;
-        await onAddActionItem(selectedCategoryId, actionItemText);
+        await addActionItem(selectedCategoryId, actionItemText);
       }
       toast({ title: "Item added successfully!" });
       onClose(); // Close the form on success

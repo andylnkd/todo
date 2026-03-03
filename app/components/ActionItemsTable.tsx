@@ -21,7 +21,25 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import AudioRecorderWrapper from './AudioRecorderWrapper';
-import { getEmojiForCategory } from '@/lib/utils'; // Import the function
+import { getEmojiForCategory } from '@/lib/utils';
+import {
+  saveCategoryName as dashboardSaveCategoryName,
+  saveActionItemText as dashboardSaveActionItemText,
+  deleteNextStep as dashboardDeleteNextStep,
+  addActionItem as dashboardAddActionItem,
+  deleteActionItem as dashboardDeleteActionItem,
+  addCategory as dashboardAddCategory,
+  deleteCategory as dashboardDeleteCategory,
+} from '@/app/server-actions/dashboardActions';
+import {
+  saveCategoryName as dailySaveCategoryName,
+  saveActionItemText as dailySaveActionItemText,
+  deleteNextStep as dailyDeleteNextStep,
+  addActionItem as dailyAddActionItem,
+  deleteActionItem as dailyDeleteActionItem,
+  addCategory as dailyAddCategory,
+  deleteCategory as dailyDeleteCategory,
+} from '@/app/server-actions/dailyActions';
 
 // Move the ActionItemWithNextSteps type definition here for use in ActionItemRow
 interface NextStepDetail {
@@ -48,15 +66,8 @@ interface Category {
 
 // Define the props for the table component
 interface ActionItemsTableProps {
-  categories: Category[]; // Expect an array of the updated Category structure
-  onSaveCategory: (id: string, newName: string) => Promise<void>;
-  onSaveActionItem: (id: string, newText: string, newDueDate?: Date | null) => Promise<void>;
-  onDeleteNextStep: (id: string) => Promise<void>;
-  onAddActionItem: (categoryId: string, text: string) => Promise<void>;
-  onDeleteActionItem: (id: string) => Promise<void>;
-  onAddCategory: (name: string) => Promise<string | null>;
-  onDeleteCategory: (id: string) => Promise<void>;
-  isDailyView?: boolean;
+  categories: Category[];
+  variant?: 'dashboard' | 'daily';
 }
 
 type SortOption = 'dueDate' | 'name' | 'recent';
@@ -65,7 +76,16 @@ type SortOption = 'dueDate' | 'name' | 'recent';
 
 import { CategoryAccordionItem } from './CategoryAccordionItem';
 
-const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveCategory, onSaveActionItem, onDeleteNextStep, onAddActionItem, onDeleteActionItem, onAddCategory, onDeleteCategory, isDailyView = false }) => {
+const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant = 'dashboard' }) => {
+  const isDaily = variant === 'daily';
+  
+  const saveCategoryName = isDaily ? dailySaveCategoryName : dashboardSaveCategoryName;
+  const saveActionItemText = isDaily ? dailySaveActionItemText : dashboardSaveActionItemText;
+  const deleteNextStep = isDaily ? dailyDeleteNextStep : dashboardDeleteNextStep;
+  const addActionItem = isDaily ? dailyAddActionItem : dashboardAddActionItem;
+  const deleteActionItem = isDaily ? dailyDeleteActionItem : dashboardDeleteActionItem;
+  const addCategory = isDaily ? dailyAddCategory : dashboardAddCategory;
+  const deleteCategory = isDaily ? dailyDeleteCategory : dashboardDeleteCategory;
   const router = useRouter();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,7 +114,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   // Function to handle saving category edits
   const handleSaveCategory = async (id: string, newName: string) => {
     try {
-      await onSaveCategory(id, newName);
+      await saveCategoryName(id, newName);
       router.refresh(); // Refresh to show changes
     } catch (err: unknown) {
       console.error('Failed to update category:', err);
@@ -109,7 +129,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   // Function to handle saving action item edits
   const handleSaveActionItem = async (id: string, newText: string, newDueDate?: Date | null) => {
     try {
-      await onSaveActionItem(id, newText, newDueDate || null);
+      await saveActionItemText(id, newText, newDueDate || null);
       router.refresh(); // Refresh to show changes
     } catch (error) {
       console.error('Failed to update action item:', error);
@@ -156,7 +176,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   // Function to handle deleting a next step
   const handleDeleteNextStep = async (id: string) => {
     try {
-      await onDeleteNextStep(id);
+      await deleteNextStep(id);
       router.refresh(); // Refresh to show changes
     } catch (error) {
       console.error('Failed to delete next step:', error);
@@ -171,7 +191,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   // Function to handle deleting an action item
   const handleDeleteActionItem = async (id: string) => {
     try {
-      await onDeleteActionItem(id);
+      await deleteActionItem(id);
       router.refresh(); // Refresh to show changes
     } catch (error) {
       console.error('Failed to delete action item:', error);
@@ -186,7 +206,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
   // Function to handle adding a new category
   const handleAddCategory = async (name: string) => {
     try {
-      const newCategoryId = await onAddCategory(name);
+      const newCategoryId = await addCategory(name);
       router.refresh(); // Refresh to show changes
       return newCategoryId;
     } catch (error) {
@@ -208,7 +228,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     }
 
     try {
-      await onDeleteCategory(id);
+      await deleteCategory(id);
       router.refresh();
       toast({
         title: 'Success',
@@ -378,7 +398,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
       try {
         const newCategoryId = await handleAddCategory(quickInputText);
         if (newCategoryId) {
-          await onAddActionItem(newCategoryId, quickActionItemText);
+          await addActionItem(newCategoryId, quickActionItemText);
           setSelectedCategoryId('');
         }
         setQuickInputText('');
@@ -394,7 +414,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
     } else if (selectedCategoryId) {
       if (!quickInputText.trim()) return;
       try {
-        await onAddActionItem(selectedCategoryId, quickInputText);
+        await addActionItem(selectedCategoryId, quickInputText);
         setSelectedCategoryId('');
         setQuickInputText('');
         router.refresh();
@@ -777,7 +797,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                 setEnhanceModalOpen={setEnhanceModalOpen}
                 handleSaveNextStep={handleSaveNextStep}
                 handleDeleteNextStep={handleDeleteNextStep}
-                isDailyView={isDailyView}
+                isDailyView={isDaily}
                 handleConvertToRegular={handleConvertToRegular}
                 handleConvertCategoryToRegular={handleConvertCategoryToRegular}
                 handleDeleteCategory={handleDeleteCategory}
@@ -810,7 +830,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, onSaveC
                 setEnhanceModalOpen={setEnhanceModalOpen}
                 handleSaveNextStep={handleSaveNextStep}
                 handleDeleteNextStep={handleDeleteNextStep}
-                isDailyView={isDailyView}
+                isDailyView={isDaily}
                 handleConvertToRegular={handleConvertToRegular}
                 handleConvertCategoryToRegular={handleConvertCategoryToRegular}
                 handleDeleteCategory={handleDeleteCategory}

@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { FLAT_EXTRACTION_PROMPT } from '@/app/server-actions/transcriptActions';
-
-// Ensure the API key is available
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY environment variable is not set');
-}
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+import { auth } from '@clerk/nextjs/server';
+import { FLAT_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
 
 export async function POST(req: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+      return NextResponse.json({ error: 'AI service not configured' }, { status: 503 });
+    }
+
     const formData = await req.formData();
     const file = formData.get('file');
 
@@ -20,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const imageBlob = file as Blob;
     
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: "gemini-2.0-flash" });
     
     const base64Data = Buffer.from(await imageBlob.arrayBuffer()).toString("base64");
 

@@ -3,10 +3,8 @@ import Link from 'next/link';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../drizzle/db';
 import * as schema from '../../drizzle/schema';
-import { eq, and, gte, lte, inArray } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
+import { eq, and, gte, lte } from 'drizzle-orm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions';
 import InputHub from '../components/InputHub';
 import ActionItemsTable from '../components/ActionItemsTable';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
@@ -18,130 +16,6 @@ function getTodayTimestamps() {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   return { start, end };
-}
-
-async function addCategory(name: string): Promise<string | null> {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  try {
-    const [inserted] = await db.insert(schema.categories)
-      .values({ name, userId })
-      .returning({ id: schema.categories.id });
-    revalidatePath('/daily');
-    return inserted.id;
-  } catch (error) {
-    console.error("Failed to add category:", error);
-    return null;
-  }
-}
-
-async function addActionItem(categoryId: string, text: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  await db.insert(schema.actionItems).values({ categoryId, actionItem: text, userId, type: 'daily' });
-  revalidatePath('/daily');
-}
-
-async function saveCategoryName(id: string, newName: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  await db.update(schema.categories)
-    .set({ name: newName, updatedAt: new Date() })
-    .where(and(eq(schema.categories.id, id), eq(schema.categories.userId, userId)));
-  revalidatePath('/daily');
-}
-
-async function saveActionItemText(id: string, newText: string, newDueDate?: Date | null) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  const updateData: { actionItem: string; updatedAt: Date; dueDate?: Date | null } = { actionItem: newText, updatedAt: new Date() };
-  if (newDueDate !== undefined) {
-    updateData.dueDate = newDueDate;
-  }
-  
-  await db.update(schema.actionItems)
-    .set(updateData)
-    .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
-  revalidatePath('/daily');
-}
-
-async function deleteNextStep(id: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  await db.delete(schema.nextSteps)
-    .where(and(eq(schema.nextSteps.id, id), eq(schema.nextSteps.userId, userId)));
-  revalidatePath('/daily');
-}
-
-async function deleteActionItem(id: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-  // First delete all next steps for this action item
-  await db.delete(schema.nextSteps)
-    .where(and(eq(schema.nextSteps.actionItemId, id), eq(schema.nextSteps.userId, userId)));
-  // Then delete the action item
-  await db.delete(schema.actionItems)
-    .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.userId, userId)));
-  revalidatePath('/daily');
-}
-
-async function deleteCategory(id: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  // Find all action item IDs for this category
-  const actionItems = await db.select({ id: schema.actionItems.id })
-    .from(schema.actionItems)
-    .where(and(eq(schema.actionItems.categoryId, id), eq(schema.actionItems.userId, userId)));
-  const actionItemIds = actionItems.map(ai => ai.id);
-
-  if (actionItemIds.length > 0) {
-    // Delete all next steps for these action items
-    await db.delete(schema.nextSteps)
-      .where(and(
-        inArray(schema.nextSteps.actionItemId, actionItemIds),
-        eq(schema.nextSteps.userId, userId)
-      ));
-    // Delete all action items for this category
-    await db.delete(schema.actionItems)
-      .where(and(
-        inArray(schema.actionItems.id, actionItemIds),
-        eq(schema.actionItems.userId, userId)
-      ));
-  }
-  // Delete the category
-  await db.delete(schema.categories)
-    .where(and(eq(schema.categories.id, id), eq(schema.categories.userId, userId)));
-  revalidatePath('/daily');
-}
-
-async function handleSaveExtractedItems(items: string[]) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('User not authenticated');
-
-  const transcript = items.join('\\n');
-  if (!transcript) return;
-
-  try {
-    await processTranscriptAndSave({
-      transcript,
-      userId,
-      itemType: 'daily',
-    });
-    revalidatePath('/daily');
-  } catch (error) {
-    console.error("Daily extracted items processing error:", error);
-    throw error;
-  }
 }
 
 export default async function DailyPage() {
@@ -226,23 +100,6 @@ export default async function DailyPage() {
   // Sort categories by name
   categories.sort((a, b) => a.name.localeCompare(b.name));
 
-  async function handleDailyTranscriptProcessed(transcript: string) {
-    'use server';
-    if (!userId) throw new Error('User not authenticated for daily processing');
-    
-    try {
-      await processTranscriptAndSave({
-        transcript,
-        userId,
-        itemType: 'daily',
-      });
-      revalidatePath('/daily');
-    } catch (error) {
-      console.error("Error processing daily transcript in server action:", error);
-      throw error;
-    }
-  }
-
   return (
     <SelectedItemsProvider>
       <div className="min-h-screen bg-gray-50">
@@ -264,10 +121,7 @@ export default async function DailyPage() {
           <div className="max-w-4xl mx-auto space-y-8">
             <InputHub
               categories={allCategoriesForUser}
-              onTranscriptProcessed={handleDailyTranscriptProcessed}
-              onAddCategory={addCategory}
-              onAddActionItem={addActionItem}
-              onSaveExtractedItems={handleSaveExtractedItems}
+              variant="daily"
             />
             
             <Card>
@@ -277,14 +131,7 @@ export default async function DailyPage() {
               <CardContent>
                 <ActionItemsTable
                   categories={categories}
-                  onSaveCategory={saveCategoryName}
-                  onSaveActionItem={saveActionItemText}
-                  onDeleteNextStep={deleteNextStep}
-                  onAddActionItem={addActionItem}
-                  onDeleteActionItem={deleteActionItem}
-                  onAddCategory={addCategory}
-                  onDeleteCategory={deleteCategory}
-                  isDailyView={true}
+                  variant="daily"
                 />
               </CardContent>
             </Card>

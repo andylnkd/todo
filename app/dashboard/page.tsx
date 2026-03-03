@@ -6,11 +6,10 @@ import { auth } from '@clerk/nextjs/server'; // Correct import for server compon
 import { redirect } from 'next/navigation';
 import { db } from '../../drizzle/db'; // Corrected path
 import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '../../drizzle/schema'; // Corrected path
-import { eq, and, inArray } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache'; // Import for revalidation
+import { eq, and } from 'drizzle-orm';
+
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { processTranscriptAndSave } from '@/app/server-actions/transcriptActions'; // Using alias
 
 // Import components
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -23,187 +22,7 @@ import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
 import InputHub from '../components/InputHub'; // Import the new InputHub
 
-// --- Server Actions for Saving ---
-async function saveCategoryName(id: string, newName: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    await db.update(categoriesTable)
-      .set({ name: newName, updatedAt: new Date() })
-      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)));
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to save category:", error);
-    throw new Error("Failed to update category name.");
-  }
-}
-
-async function saveActionItemText(id: string, newText: string, newDueDate?: Date | null) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    const updateData: { actionItem: string; updatedAt: Date; dueDate?: Date | null } = { actionItem: newText, updatedAt: new Date() };
-    if (newDueDate !== undefined) {
-      updateData.dueDate = newDueDate;
-    }
-    
-    await db.update(actionItemsTable)
-      .set(updateData)
-      .where(and(eq(actionItemsTable.id, id), eq(actionItemsTable.userId, userId)));
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to save action item:", error);
-    throw new Error("Failed to update action item text.");
-  }
-}
-
-async function deleteNextStep(id: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    await db.delete(nextStepsTable)
-      .where(and(eq(nextStepsTable.id, id), eq(nextStepsTable.userId, userId)));
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to delete next step:", error);
-    throw new Error("Failed to delete next step.");
-  }
-}
-
-async function addActionItem(categoryId: string, text: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    await db.insert(actionItemsTable)
-      .values({
-        categoryId,
-        actionItem: text,
-        userId
-      });
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to add action item:", error);
-    throw new Error("Failed to add action item.");
-  }
-}
-
-async function deleteActionItem(id: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    await db.delete(actionItemsTable)
-      .where(and(eq(actionItemsTable.id, id), eq(actionItemsTable.userId, userId)));
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to delete action item:", error);
-    throw new Error("Failed to delete action item.");
-  }
-}
-
-async function addCategory(name: string): Promise<string | null> { // Ensure return type matches what QuickAddForm expects
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    const [inserted] = await db.insert(categoriesTable)
-      .values({ name, userId })
-      .returning({ id: categoriesTable.id });
-    revalidatePath('/dashboard');
-    return inserted.id;
-  } catch (error) {
-    console.error("Failed to add category:", error);
-    // Return null or throw, depending on desired error handling in the component
-    return null;
-  }
-}
-
-async function deleteCategory(id: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
-  try {
-    // 1. Find all action item IDs for this category
-    const actionItems = await db.select({ id: actionItemsTable.id })
-      .from(actionItemsTable)
-      .where(and(eq(actionItemsTable.categoryId, id), eq(actionItemsTable.userId, userId)));
-    const actionItemIds = actionItems.map(ai => ai.id);
-
-    if (actionItemIds.length > 0) {
-      // 2. Delete all next steps for these action items
-      await db.delete(nextStepsTable)
-        .where(and(
-          inArray(nextStepsTable.actionItemId, actionItemIds),
-          eq(nextStepsTable.userId, userId)
-        ));
-      // 3. Delete all action items for this category
-      await db.delete(actionItemsTable)
-        .where(and(
-          inArray(actionItemsTable.id, actionItemIds),
-          eq(actionItemsTable.userId, userId)
-        ));
-    }
-    // 4. Delete the category
-    await db.delete(categoriesTable)
-      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)));
-    revalidatePath('/dashboard'); // Revalidate to show changes
-  } catch (error) {
-    console.error("Failed to delete category:", error);
-    throw new Error("Failed to delete category.");
-  }
-}
-
-async function handleDashboardTranscriptProcessed(transcript: string) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('User not authenticated for dashboard processing');
-
-  try {
-    await processTranscriptAndSave({
-      transcript,
-      userId,
-      itemType: 'regular',
-    });
-    revalidatePath('/dashboard');
-  } catch (error) {
-    console.error("Dashboard transcript processing error:", error);
-    // Optionally, return an error message to be displayed
-  }
-}
-
-async function handleSaveExtractedItems(items: string[]) {
-  'use server';
-  const { userId } = await auth();
-  if (!userId) throw new Error('User not authenticated');
-
-  const transcript = items.join('\\n');
-  if (!transcript) return;
-
-  try {
-    await processTranscriptAndSave({
-      transcript,
-      userId,
-      itemType: 'regular',
-    });
-    revalidatePath('/dashboard');
-  } catch (error) {
-    console.error("Dashboard extracted items processing error:", error);
-    throw error;
-  }
-}
-
-// --- End Server Actions ---
+// Server actions moved to app/server-actions/dashboardActions.ts
 
 // The main Dashboard page component is now async
 export default async function Dashboard() {
@@ -302,10 +121,6 @@ export default async function Dashboard() {
           <div className="space-y-8">
             <InputHub
               categories={allCategories}
-              onTranscriptProcessed={handleDashboardTranscriptProcessed}
-              onAddCategory={addCategory}
-              onAddActionItem={addActionItem}
-              onSaveExtractedItems={handleSaveExtractedItems}
             />
             
             <Card>
@@ -322,13 +137,6 @@ export default async function Dashboard() {
               <CardContent>
                 <ActionItemsTable
                   categories={categories}
-                  onSaveCategory={saveCategoryName}
-                  onSaveActionItem={saveActionItemText}
-                  onDeleteNextStep={deleteNextStep}
-                  onAddActionItem={addActionItem}
-                  onDeleteActionItem={deleteActionItem}
-                  onAddCategory={addCategory}
-                  onDeleteCategory={deleteCategory}
                 />
               </CardContent>
             </Card>

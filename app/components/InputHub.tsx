@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { MoreHorizontal, Keyboard, Camera, X, Loader2, Check } from 'lucide-react';
@@ -18,24 +19,39 @@ interface Category {
 // Define the props for the InputHub
 interface InputHubProps {
   categories: Category[];
-  onTranscriptProcessed: (transcript: string) => Promise<void>;
-  onAddCategory: (name: string) => Promise<string | null>;
-  onAddActionItem: (categoryId: string, text: string) => Promise<void>;
-  onSaveExtractedItems: (items: string[]) => Promise<void>;
+  variant?: 'dashboard' | 'daily';
 }
 
 export default function InputHub({
   categories,
-  onTranscriptProcessed,
-  onAddCategory,
-  onAddActionItem,
-  onSaveExtractedItems,
+  variant = 'dashboard',
 }: InputHubProps) {
+  const isDaily = variant === 'daily';
+
   const [view, setView] = useState<'main' | 'type' | 'image'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedItems, setExtractedItems] = useState<string[]>([]);
   const [selectedItems, setSelectedItems] = useState<Record<number, boolean>>({});
   const { toast } = useToast();
+  const router = useRouter();
+
+  const transcriptProcessed = async (transcript: string) => {
+    const response = await fetch('/api/process-transcript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transcript,
+        type: isDaily ? 'daily' : 'regular',
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.error || 'Failed to process transcript.');
+    }
+
+    router.refresh();
+  };
 
   const handleFileSelected = async (file: File) => {
     setIsProcessing(true);
@@ -88,10 +104,19 @@ export default function InputHub({
     
     setIsProcessing(true);
     try {
-      await onSaveExtractedItems(itemsToSave);
+      const response = await fetch('/api/save-extracted-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToSave, itemType: isDaily ? 'daily' : 'regular' }),
+      });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error || 'Failed to save extracted items.');
+      }
       toast({ title: "Items saved successfully!" });
       setExtractedItems([]);
       setSelectedItems({});
+      router.refresh();
     } catch (error) {
       console.error("Error in handleSave:", error);
       toast({ title: "Error saving items", description: error instanceof Error ? error.message : 'Please try again.', variant: "destructive" });
@@ -103,7 +128,7 @@ export default function InputHub({
   const renderView = () => {
     switch (view) {
       case 'type':
-        return <QuickAddForm categories={categories} onAddCategory={onAddCategory} onAddActionItem={onAddActionItem} onClose={() => setView('main')} />;
+        return <QuickAddForm categories={categories} variant={variant} onClose={() => setView('main')} />;
       case 'image':
         if (isProcessing && extractedItems.length === 0) {
           return (
@@ -139,7 +164,7 @@ export default function InputHub({
         {/* This is the main bar, always visible when view is 'main' */}
         {view === 'main' && (
           <div className="flex items-center justify-center gap-3">
-            <AudioRecorderWrapper onTranscriptProcessed={onTranscriptProcessed} />
+            <AudioRecorderWrapper onTranscriptProcessed={transcriptProcessed} />
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full">

@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../../drizzle/db';
 import * as schema from '../../../../drizzle/schema';
+import { TASK_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -13,8 +14,6 @@ const log = (message: string, data?: Record<string, unknown>) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${message}`, data ? JSON.stringify(data, null, 2) : '');
 };
-
-import { TASK_EXTRACTION_PROMPT } from '@/app/server-actions/transcriptActions';
 
 function corsHeaders() {
   return {
@@ -36,10 +35,8 @@ export async function POST(request: NextRequest) {
     });
     
     // Log headers for debugging
-    const authHeader = request.headers.get('authorization');
     log('🔑 Auth Header received:', { 
-      hasAuthHeader: !!authHeader,
-      authHeaderStart: authHeader ? authHeader.substring(0, 15) + '...' : 'none',
+      hasAuthHeader: !!request.headers.get('authorization'),
       contentType: request.headers.get('content-type')
     });
 
@@ -47,7 +44,7 @@ export async function POST(request: NextRequest) {
     log('🔐 Auth check result:', { 
       userId,
       isAuthenticated: !!userId,
-      headers: Object.fromEntries(request.headers.entries())
+      hasAuthorizationHeader: !!request.headers.get('authorization')
     });
 
     if (!userId) {
