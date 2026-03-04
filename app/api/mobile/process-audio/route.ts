@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
 
       // Process transcript with Gemini
       log('🤖 Processing transcript with Gemini AI');
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
       const result = await model.generateContent([TASK_EXTRACTION_PROMPT, transcript]);
       const response = await result.response;
       let text = response.text();

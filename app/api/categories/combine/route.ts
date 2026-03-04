@@ -72,7 +72,7 @@ export async function POST(req: Request) {
           if (!geminiKey) {
             throw new Error('GEMINI_API_KEY not configured');
           }
-          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: "gemini-2.0-flash" });
+          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
           const prompt = CATEGORY_MERGE_PROMPT
             .replace('{numCategories}', categoriesToMerge.length.toString())
             .replace('{categoriesList}', categoriesToMerge.map(cat => `- ${cat.name}`).join('\n'));

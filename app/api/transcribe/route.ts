@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { auth } from '@clerk/nextjs/server';
+import { GoogleGenAI } from '@google/genai';
 
 // Add CORS headers helper function
 function corsHeaders() {
@@ -22,31 +22,49 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders() });
     }
 
-    const openAIKey = process.env.OPENAI_API_KEY;
-    if (!openAIKey) {
-        return NextResponse.json({ error: 'OpenAI API key not configured.' }, { status: 500 });
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+        return NextResponse.json({ error: 'Gemini API key not configured.' }, { status: 500, headers: corsHeaders() });
     }
+    const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 
     try {
-        const openai = new OpenAI({ apiKey: openAIKey });
         const formData = await req.formData();
         const file = formData.get('file');
 
         if (!file || typeof file === 'string') {
-            return NextResponse.json({ error: 'No file uploaded.' }, { status: 400 });
+            return NextResponse.json({ error: 'No file uploaded.' }, { status: 400, headers: corsHeaders() });
         }
-        
-        // The OpenAI SDK can handle the file directly
-        const response = await openai.audio.transcriptions.create({
-            file: file,
-            model: 'whisper-1',
-        });
 
-        return NextResponse.json({ transcript: response.text }, { headers: corsHeaders() });
+        const audioBlob = file as Blob;
+        const mimeType = audioBlob.type || 'audio/webm';
+        const audioBase64 = Buffer.from(await audioBlob.arrayBuffer()).toString('base64');
+
+        const client = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await client.models.generateContent({
+          model: geminiModel,
+          contents: [
+            { text: 'Transcribe this audio file. Return only the transcript text with no extra formatting.' },
+            { inlineData: { data: audioBase64, mimeType } },
+          ],
+        });
+        const transcript = response.text?.trim();
+
+        if (!transcript) {
+          return NextResponse.json(
+            { error: 'Transcription failed.', details: 'Gemini returned an empty transcript.' },
+            { status: 502, headers: corsHeaders() }
+          );
+        }
+
+        return NextResponse.json({ transcript }, { headers: corsHeaders() });
     } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         console.error('Error in transcription:', error);
-        return NextResponse.json({ error: 'Transcription failed.', details: error.message }, { status: 500, headers: corsHeaders() });
+        const status = error.message.includes('[429') || error.message.includes('quota')
+          ? 429
+          : 500;
+        return NextResponse.json({ error: 'Transcription failed.', details: error.message }, { status, headers: corsHeaders() });
     }
 }
 

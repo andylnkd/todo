@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const imageBlob = file as Blob;
     
-    const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
     
     const base64Data = Buffer.from(await imageBlob.arrayBuffer()).toString("base64");
 

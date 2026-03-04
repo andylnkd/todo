@@ -30,7 +30,10 @@ export default function AudioRecorderWrapper({ onTranscriptProcessed }: AudioRec
       });
 
       const transcribeData = await transcribeResponse.json();
-      if (!transcribeResponse.ok) throw new Error(transcribeData.error || 'Failed to transcribe audio');
+      if (!transcribeResponse.ok) {
+        const details = transcribeData?.details ? ` ${transcribeData.details}` : '';
+        throw new Error((transcribeData?.error || 'Failed to transcribe audio') + details);
+      }
       
       const transcriptText = transcribeData.transcript;
       

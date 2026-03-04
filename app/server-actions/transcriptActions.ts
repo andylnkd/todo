@@ -14,6 +14,10 @@ function getGenAI(): GoogleGenerativeAI {
   return new GoogleGenerativeAI(geminiKey);
 }
 
+function getGeminiModel(): string {
+  return process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+}
+
 interface ActionItemForDB { 
   actionItem: string;
   nextSteps: string[];
@@ -55,7 +59,7 @@ export async function processTranscriptAndSave({
   }
 
   // 2. Process with AI
-  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
   const result = await model.generateContent([TASK_EXTRACTION_PROMPT, transcript]);
   const response = await result.response;
   let aiResponseText = response.text();
@@ -143,7 +147,7 @@ export async function processImageAndSave({
   itemType: 'daily' | 'regular';
 }) {
   // The Gemini SDK can handle the blob directly, no need for buffer/upload dance for this model.
-  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
 
   const prompt = TASK_EXTRACTION_PROMPT;
   
@@ -211,7 +215,7 @@ export async function enhanceActionItem({
   const prompt = `You are an assistant helping to update a task.\nCurrent description: ${item.actionItem}\nCurrent next steps: ${nextSteps.map(ns => ns.step).join('; ')}\nNew user input: ${transcript}\nPlease return an updated description and next steps that incorporate the new information.\nReturn as JSON: {"description": string, "nextSteps": string[]}`;
 
   // 3. Call LLM
-  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
   const result = await model.generateContent([prompt]);
   const response = await result.response;
   let aiResponseText = response.text();
@@ -280,7 +284,7 @@ export async function enhanceCategory({
   const prompt = `You are an assistant helping to update a category of tasks.\nCurrent category name: ${category.name}\nCurrent items: ${items.map(i => i.actionItem).join('; ')}\nNew user input: ${transcript}\nPlease return an updated category name (if needed), and an updated list of items that incorporate the new information.\nReturn as JSON: {"categoryName": string, "items": string[]}`;
 
   // 3. Call LLM
-  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
   const result = await model.generateContent([prompt]);
   const response = await result.response;
   let aiResponseText = response.text();

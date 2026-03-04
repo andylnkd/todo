@@ -120,7 +120,7 @@ export async function POST() {
      );
 
      // Call Gemini API (first attempt)
-     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+     const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
      let result, response, text;
      let parsedSuggestions: GeminiSuggestions;
      const step = 'first';
