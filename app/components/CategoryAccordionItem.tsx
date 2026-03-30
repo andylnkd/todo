@@ -18,6 +18,7 @@ interface ActionItemWithNextSteps {
   actionItemId: string;
   actionItem: string;
   dueDate?: string | null;
+  priority?: 'high' | 'normal' | 'low';
   nextSteps: NextStepDetail[];
 }
 
@@ -34,7 +35,7 @@ interface CategoryAccordionItemProps {
   isSelected: (id: string) => boolean;
   toggleItem: (id: string) => void;
   handleSaveCategory: (id: string, newName: string) => Promise<void>;
-  handleSaveActionItem: (id: string, newText: string, newDueDate?: Date | null) => Promise<void>;
+  handleSaveActionItem: (id: string, newText: string, newDueDate?: Date | null, priority?: 'high' | 'normal' | 'low') => Promise<void>;
   handleDeleteActionItem: (id: string) => void;
   setEnhanceTarget: (target: { id: string, type: 'actionItem' | 'category' }) => void;
   setEnhanceModalOpen: (open: boolean) => void;

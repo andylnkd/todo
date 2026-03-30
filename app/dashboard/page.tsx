@@ -21,6 +21,7 @@ import SendWhatsAppButton from '../components/SendWhatsAppButton';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
 import InputHub from '../components/InputHub'; // Import the new InputHub
+import InstallAppButton from '../components/InstallAppButton';
 
 // Server actions moved to app/server-actions/dashboardActions.ts
 
@@ -73,14 +74,15 @@ export default async function Dashboard() {
         
         if (row.action_items) {
           const actionItemId = row.action_items.id;
-          if (!category.items.has(actionItemId)) {
-            category.items.set(actionItemId, {
-              actionItemId,
-              actionItem: row.action_items.actionItem,
-              dueDate: row.action_items.dueDate ? row.action_items.dueDate : null,
-              nextSteps: []
-            });
-          }
+              if (!category.items.has(actionItemId)) {
+                category.items.set(actionItemId, {
+                  actionItemId,
+                  actionItem: row.action_items.actionItem,
+                  dueDate: row.action_items.dueDate ? row.action_items.dueDate : null,
+                  priority: row.action_items.priority,
+                  nextSteps: []
+                });
+              }
           
           if (row.next_steps) {
             const nextStep = {
@@ -111,6 +113,7 @@ export default async function Dashboard() {
           <div className="container flex h-16 items-center justify-between">
             <Link href="/dashboard" className="text-xl font-bold">Innatus</Link>
             <div className="flex items-center gap-4">
+              <InstallAppButton />
               <Link href="/daily"><Button variant="outline">Daily Dump</Button></Link>
               <UserButton afterSignOutUrl="/" />
             </div>

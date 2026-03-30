@@ -127,6 +127,7 @@ export async function POST(req: Request) {
             transcriptionId: item.transcriptionId,
             status: item.status,
             type: item.type,
+            priority: item.priority,
             createdAt: new Date(),
             updatedAt: new Date()
           }).returning({ id: actionItems.id });

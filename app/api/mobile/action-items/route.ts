@@ -24,6 +24,7 @@ export async function GET() {
         actionItem: schema.actionItems.actionItem,
         status: schema.actionItems.status,
         categoryId: schema.actionItems.categoryId,
+        priority: schema.actionItems.priority,
       })
       .from(schema.actionItems)
       .where(eq(schema.actionItems.userId, userId));
@@ -47,6 +48,7 @@ export async function GET() {
           id: ai.id,
           actionItem: ai.actionItem,
           status: ai.status,
+          priority: ai.priority,
           nextSteps: nextSteps
             .filter((ns) => ns.actionItemId === ai.id)
             .map((ns) => ({ step: ns.step, completed: ns.completed })),

@@ -8,6 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import InputHub from '../components/InputHub';
 import ActionItemsTable from '../components/ActionItemsTable';
 import { SelectedItemsProvider } from '../context/SelectedItemsContext';
+import InstallAppButton from '../components/InstallAppButton';
+import SendWhatsAppButton from '../components/SendWhatsAppButton';
+import ShareToTelegramButton from '../components/ShareToTelegramButton';
+import NativeShareButton from '../components/NativeShareButton';
+import CopySelectedItemsButton from '../components/CopySelectedItemsButton';
 
 // Helper to get start and end of today
 function getTodayTimestamps() {
@@ -76,6 +81,7 @@ export default async function DailyPage() {
         actionItem: row.action_items.actionItem,
         dueDate: row.action_items.dueDate,
         status: row.action_items.status,
+        priority: row.action_items.priority,
         nextSteps: []
       });
     }
@@ -112,7 +118,10 @@ export default async function DailyPage() {
                 </Link>
                 <h1 className="text-2xl font-semibold text-gray-800">Daily Dump</h1>
               </div>
-              <UserButton afterSignOutUrl="/" />
+              <div className="flex items-center gap-3">
+                <InstallAppButton />
+                <UserButton afterSignOutUrl="/" />
+              </div>
             </div>
           </div>
         </header>
@@ -127,6 +136,12 @@ export default async function DailyPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Today&apos;s Entries</CardTitle>
+                <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <SendWhatsAppButton categories={categories} title="Daily Dump" />
+                  <ShareToTelegramButton categories={categories} title="Daily Dump" />
+                  <NativeShareButton categories={categories} title="Daily Dump" />
+                  <CopySelectedItemsButton categories={categories} title="Daily Dump" />
+                </div>
               </CardHeader>
               <CardContent>
                 <ActionItemsTable

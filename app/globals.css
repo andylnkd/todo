@@ -18,6 +18,13 @@ body {
   background: rgb(var(--background-rgb));
 }
 
+.offline-shell {
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 38%),
+    radial-gradient(circle at bottom right, rgba(15, 23, 42, 0.14), transparent 42%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+}
+
 
 
 @layer base {

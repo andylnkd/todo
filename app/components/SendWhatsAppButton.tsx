@@ -4,63 +4,16 @@ import { Button } from '@/components/ui/button';
 import { MessageCircle } from 'lucide-react';
 import { useSelectedItems } from '../context/SelectedItemsContext';
 import { useToast } from '@/hooks/use-toast';
+import { formatSelectedItemsText, type ShareCategory } from '@/app/lib/selected-items-share';
 
 interface SendWhatsAppButtonProps {
-  categories: Array<{
-    name: string;
-    items: Array<{
-      actionItemId: string;
-      actionItem: string;
-      nextSteps: Array<{
-        text: string;
-        completed: boolean;
-        dueDate?: Date | null;
-      }>;
-    }>;
-  }>;
+  categories: ShareCategory[];
+  title?: string;
 }
 
-export default function SendWhatsAppButton({ categories }: SendWhatsAppButtonProps) {
+export default function SendWhatsAppButton({ categories, title = 'Selected Action Items' }: SendWhatsAppButtonProps) {
   const { selectedItems, clearSelection } = useSelectedItems();
   const { toast } = useToast();
-
-  const formatMessage = (categories: SendWhatsAppButtonProps['categories']) => {
-    let message = '📋 *Selected Action Items:*\n\n';
-    
-    categories.forEach(category => {
-      const selectedItemsInCategory = category.items.filter(item => 
-        selectedItems.has(item.actionItemId)
-      );
-
-      if (selectedItemsInCategory.length > 0) {
-        message += `*${category.name}*\n`;
-        selectedItemsInCategory.forEach(item => {
-          message += `• ${item.actionItem}\n`;
-          if (item.nextSteps.length > 0) {
-            message += '  Next Steps:\n';
-            item.nextSteps.forEach(step => {
-              const status = step.completed ? '✅' : '⭕';
-              const dueDate = step.dueDate ? ` (Due: ${new Date(step.dueDate).toLocaleDateString()})` : '';
-              message += `  ${status} ${step.text}${dueDate}\n`;
-            });
-          }
-          message += '\n';
-        });
-      }
-    });
-
-    // If no items are selected, return null
-    if (message === '📋 *Selected Action Items:*\n\n') {
-      return null;
-    }
-
-    // Ensure message doesn't exceed WhatsApp's URL length limit (~2000 chars)
-    if (message.length > 2000) {
-      message = message.substring(0, 1950) + '...\n\n(Message truncated due to length)';
-    }
-
-    return message;
-  };
 
   const handleSend = () => {
     if (selectedItems.size === 0) {
@@ -72,7 +25,7 @@ export default function SendWhatsAppButton({ categories }: SendWhatsAppButtonPro
       return;
     }
 
-    const message = formatMessage(categories);
+    let message = formatSelectedItemsText(categories, selectedItems, title);
     if (!message) {
       toast({
         title: "No items to send",
@@ -80,6 +33,10 @@ export default function SendWhatsAppButton({ categories }: SendWhatsAppButtonPro
         variant: "destructive",
       });
       return;
+    }
+
+    if (message.length > 2000) {
+      message = message.substring(0, 1950) + '\n\n(Message truncated due to length)';
     }
 
     // Get WhatsApp number from environment variable

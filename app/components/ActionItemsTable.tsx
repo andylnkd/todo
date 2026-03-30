@@ -53,6 +53,7 @@ interface ActionItemWithNextSteps {
   actionItemId: string;
   actionItem: string;
   dueDate?: string | null;
+  priority?: 'high' | 'normal' | 'low';
   nextSteps: NextStepDetail[];
 }
 
@@ -127,9 +128,9 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
   };
 
   // Function to handle saving action item edits
-  const handleSaveActionItem = async (id: string, newText: string, newDueDate?: Date | null) => {
+  const handleSaveActionItem = async (id: string, newText: string, newDueDate?: Date | null, priority?: 'high' | 'normal' | 'low') => {
     try {
-      await saveActionItemText(id, newText, newDueDate || null);
+      await saveActionItemText(id, newText, newDueDate || null, priority);
       router.refresh(); // Refresh to show changes
     } catch (error) {
       console.error('Failed to update action item:', error);
@@ -275,6 +276,12 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
     let earliestDate: Date | null = null;
     
     for (const item of category.items) {
+      if (item.dueDate) {
+        const itemDate = new Date(item.dueDate);
+        if (!earliestDate || itemDate < earliestDate) {
+          earliestDate = itemDate;
+        }
+      }
       for (const step of item.nextSteps) {
         if (step.dueDate) {
           const stepDate = new Date(step.dueDate);
@@ -286,6 +293,33 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
     }
     
     return earliestDate;
+  };
+
+  const getItemDueDate = (item: ActionItemWithNextSteps): Date | null => {
+    if (item.dueDate) {
+      return new Date(item.dueDate);
+    }
+    let earliest: Date | null = null;
+    for (const step of item.nextSteps) {
+      if (step.dueDate) {
+        const stepDate = new Date(step.dueDate);
+        if (!earliest || stepDate < earliest) {
+          earliest = stepDate;
+        }
+      }
+    }
+    return earliest;
+  };
+
+  const priorityWeight = (priority?: 'high' | 'normal' | 'low') => {
+    switch (priority) {
+      case 'high':
+        return 0;
+      case 'low':
+        return 2;
+      default:
+        return 1;
+    }
   };
 
   // Sort categories based on selected sort option
@@ -305,16 +339,47 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
           
           // Sort by earliest date
           return dateA!.getTime() - dateB!.getTime();
-        });
+        }).map(category => ({
+          ...category,
+          items: [...category.items].sort((a, b) => {
+            const dateA = getItemDueDate(a);
+            const dateB = getItemDueDate(b);
+
+            if (dateA && !dateB) return -1;
+            if (!dateA && dateB) return 1;
+            if (dateA && dateB) {
+              const dateDiff = dateA.getTime() - dateB.getTime();
+              if (dateDiff !== 0) return dateDiff;
+            }
+
+            const priorityDiff = priorityWeight(a.priority) - priorityWeight(b.priority);
+            if (priorityDiff !== 0) return priorityDiff;
+            return a.actionItem.localeCompare(b.actionItem);
+          })
+        }));
       
       case 'name':
         return categoriesToSort.sort((a, b) => 
           a.name.localeCompare(b.name)
-        );
+        ).map(category => ({
+          ...category,
+          items: [...category.items].sort((a, b) => {
+            const priorityDiff = priorityWeight(a.priority) - priorityWeight(b.priority);
+            if (priorityDiff !== 0) return priorityDiff;
+            return a.actionItem.localeCompare(b.actionItem);
+          })
+        }));
       
       case 'recent':
         // Assuming items are already in chronological order
-        return categoriesToSort;
+        return categoriesToSort.map(category => ({
+          ...category,
+          items: [...category.items].sort((a, b) => {
+            const priorityDiff = priorityWeight(a.priority) - priorityWeight(b.priority);
+            if (priorityDiff !== 0) return priorityDiff;
+            return a.actionItem.localeCompare(b.actionItem);
+          })
+        }));
       
       default:
         return categoriesToSort;

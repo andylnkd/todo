@@ -23,6 +23,7 @@ interface ActionItemWithNextSteps {
   actionItemId: string;
   actionItem: string;
   dueDate?: string | null;
+  priority?: 'high' | 'normal' | 'low';
   nextSteps: NextStepDetail[];
 }
 
@@ -30,7 +31,7 @@ interface ActionItemWithNextSteps {
 interface ActionItemRowProps {
   item: ActionItemWithNextSteps;
   isSelected: boolean;
-  onSaveActionItem: (id: string, newText: string, newDueDate?: Date | null) => Promise<void>;
+  onSaveActionItem: (id: string, newText: string, newDueDate?: Date | null, priority?: 'high' | 'normal' | 'low') => Promise<void>;
   toggleItem: (id: string) => void;
   handleDeleteActionItem: (id: string) => void;
   setEnhanceTarget: (target: { id: string, type: 'actionItem' | 'category' }) => void;
@@ -46,6 +47,11 @@ export function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, 
   const [isSavingDueDate, setIsSavingDueDate] = React.useState(false);
   const [showTimer, setShowTimer] = React.useState(false);
   const [pomodoroCount, setPomodoroCount] = React.useState(0);
+  const [priority, setPriority] = React.useState<'high' | 'normal' | 'low'>(item.priority || 'normal');
+
+  React.useEffect(() => {
+    setPriority(item.priority || 'normal');
+  }, [item.priority]);
 
   const handleDueDateChange = async (date: Date | null) => {
     setDueDate(date);
@@ -54,6 +60,39 @@ export function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, 
       await onSaveActionItem(item.actionItemId, item.actionItem, date);
     } finally {
       setIsSavingDueDate(false);
+    }
+  };
+
+  const priorityLabel = (value: 'high' | 'normal' | 'low') => {
+    switch (value) {
+      case 'high':
+        return 'High';
+      case 'low':
+        return 'Low';
+      default:
+        return 'Normal';
+    }
+  };
+
+  const priorityClass = (value: 'high' | 'normal' | 'low') => {
+    switch (value) {
+      case 'high':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'low':
+        return 'bg-blue-100 text-blue-700 border-blue-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+    }
+  };
+
+  const cyclePriority = async () => {
+    const next = priority === 'high' ? 'normal' : priority === 'normal' ? 'low' : 'high';
+    setPriority(next);
+    try {
+      await onSaveActionItem(item.actionItemId, item.actionItem, dueDate, next);
+    } catch {
+      // Revert on failure
+      setPriority(priority);
     }
   };
 
@@ -126,6 +165,22 @@ export function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, 
             />
           </PopoverContent>
         </Popover>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('h-6 border', priorityClass(priority))}
+              onClick={cyclePriority}
+              aria-label={`Set priority: ${priorityLabel(priority)}`}
+            >
+              {priorityLabel(priority)}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Click to cycle priority</p>
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

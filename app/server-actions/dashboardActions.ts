@@ -22,14 +22,17 @@ export async function saveCategoryName(id: string, newName: string) {
   }
 }
 
-export async function saveActionItemText(id: string, newText: string, newDueDate?: Date | null) {
+export async function saveActionItemText(id: string, newText: string, newDueDate?: Date | null, priority?: 'high' | 'normal' | 'low') {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
   try {
-    const updateData: { actionItem: string; updatedAt: Date; dueDate?: Date | null } = { actionItem: newText, updatedAt: new Date() };
+    const updateData: { actionItem: string; updatedAt: Date; dueDate?: Date | null; priority?: 'high' | 'normal' | 'low' } = { actionItem: newText, updatedAt: new Date() };
     if (newDueDate !== undefined) {
       updateData.dueDate = newDueDate;
+    }
+    if (priority !== undefined) {
+      updateData.priority = priority;
     }
     
     await db.update(actionItemsTable)

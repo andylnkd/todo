@@ -13,8 +13,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id, actionItem, categoryId, dueDate } = await request.json();
-    if (!id || (!actionItem && !categoryId && dueDate === undefined)) {
+    const { id, actionItem, categoryId, dueDate, priority } = await request.json();
+    if (!id || (!actionItem && !categoryId && dueDate === undefined && priority === undefined)) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -24,6 +24,7 @@ export async function PATCH(request: NextRequest) {
       actionItem?: string;
       categoryId?: string;
       dueDate?: Date | null;
+      priority?: 'high' | 'normal' | 'low';
     } = {
       updatedAt: new Date()
     };
@@ -41,6 +42,12 @@ export async function PATCH(request: NextRequest) {
       updateData.categoryId = categoryId;
     }
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+    if (priority !== undefined) {
+      if (!['high', 'normal', 'low'].includes(priority)) {
+        return NextResponse.json({ error: 'Invalid priority value' }, { status: 400 });
+      }
+      updateData.priority = priority;
+    }
     console.log('Updating action item:', { id, actionItem, categoryId, dueDate });
 
     const result = await db
@@ -56,7 +63,8 @@ export async function PATCH(request: NextRequest) {
         id: actionItems.id, 
         actionItem: actionItems.actionItem,
         categoryId: actionItems.categoryId,
-        dueDate: actionItems.dueDate
+        dueDate: actionItems.dueDate,
+        priority: actionItems.priority
       });
 
     if (!result.length) {

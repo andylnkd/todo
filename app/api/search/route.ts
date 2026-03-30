@@ -20,12 +20,20 @@ export async function GET(req: NextRequest) {
             return new NextResponse("Search query is required", { status: 400 });
         }
 
+        const normalizePriority = (priority: string | null): 'high' | 'normal' | 'low' => {
+            if (priority === 'high' || priority === 'low') {
+                return priority;
+            }
+            return 'normal';
+        };
+
         // Search across all relevant tables
         const results = await db.select({
             categoryId: categories.id,
             categoryName: categories.name,
             actionItemId: actionItems.id,
             actionItemText: actionItems.actionItem,
+            actionItemPriority: actionItems.priority,
             nextStepId: nextSteps.id,
             nextStepText: nextSteps.step,
             nextStepCompleted: nextSteps.completed,
@@ -57,6 +65,7 @@ export async function GET(req: NextRequest) {
             actionItemId: string;
             actionItem: string | null;
             dueDate: Date | null;
+            priority?: 'high' | 'normal' | 'low';
             nextSteps: NextStep[];
         }
 
@@ -84,6 +93,7 @@ export async function GET(req: NextRequest) {
                     actionItemId: row.actionItemId,
                     actionItem: row.actionItemText,
                     dueDate: row.dueDate,
+                    priority: normalizePriority(row.actionItemPriority),
                     nextSteps: []
                 });
             }
