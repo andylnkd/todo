@@ -1,6 +1,6 @@
 import { db } from '@/drizzle/db';
 import { categories as categoriesTable, actionItems as actionItemsTable, nextSteps as nextStepsTable } from '@/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 export interface FormattedCategoryData {
   name: string;
@@ -10,7 +10,12 @@ export interface FormattedCategoryData {
   }[];
 }
 
-export async function getFormattedActionItems(userId: string): Promise<FormattedCategoryData[]> {
+export async function getFormattedActionItems(userId: string, selectedItemIds?: string[]): Promise<FormattedCategoryData[]> {
+  const filters = [eq(categoriesTable.userId, userId)];
+  if (selectedItemIds && selectedItemIds.length > 0) {
+    filters.push(inArray(actionItemsTable.id, selectedItemIds));
+  }
+
   const userCategories = await db
     .select({
       categoryId: categoriesTable.id,
@@ -23,7 +28,7 @@ export async function getFormattedActionItems(userId: string): Promise<Formatted
     .from(categoriesTable)
     .leftJoin(actionItemsTable, eq(categoriesTable.id, actionItemsTable.categoryId))
     .leftJoin(nextStepsTable, eq(actionItemsTable.id, nextStepsTable.actionItemId))
-    .where(eq(categoriesTable.userId, userId))
+    .where(and(...filters))
     .orderBy(desc(actionItemsTable.createdAt), categoriesTable.name, actionItemsTable.id, nextStepsTable.id);
 
   // Process the fetched data

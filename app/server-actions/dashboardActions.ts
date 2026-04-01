@@ -82,6 +82,9 @@ export async function deleteActionItem(id: string) {
   if (!userId) throw new Error('Unauthorized');
 
   try {
+    await db.delete(nextStepsTable)
+      .where(and(eq(nextStepsTable.actionItemId, id), eq(nextStepsTable.userId, userId)));
+
     await db.delete(actionItemsTable)
       .where(and(eq(actionItemsTable.id, id), eq(actionItemsTable.userId, userId)));
     revalidatePath('/dashboard');

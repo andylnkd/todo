@@ -55,46 +55,42 @@ async function checkAndUpdateParentStatuses(nextStepId: string, userId: string) 
                 .update(actionItemsTable)
                 .set({ status: newActionItemStatus, updatedAt: new Date() })
                 .where(and(eq(actionItemsTable.id, actionItemId), eq(actionItemsTable.userId, userId)));
+        }
 
-            // 4. If Action Item status changed to complete, check Category status
-            if (newActionItemStatus === 'completed') {
-                 console.log(`Action item ${actionItemId} completed. Checking category ${categoryId} status.`);
-                // Find parent Category
-                const [parentCategory] = await tx
-                    .select({ currentStatus: categoriesTable.status })
-                    .from(categoriesTable)
-                    .where(and(eq(categoriesTable.id, categoryId), eq(categoriesTable.userId, userId)));
-                
-                if (!parentCategory) {
-                    console.warn(`Could not find parent category ${categoryId} for action item ID: ${actionItemId}`);
-                    return;
-                }
+        // 4. Recompute the parent category status any time the action item status may have changed.
+        const [parentCategory] = await tx
+            .select({ currentStatus: categoriesTable.status })
+            .from(categoriesTable)
+            .where(and(eq(categoriesTable.id, categoryId), eq(categoriesTable.userId, userId)));
+        
+        if (!parentCategory) {
+            console.warn(`Could not find parent category ${categoryId} for action item ID: ${actionItemId}`);
+            return;
+        }
 
-                // 5. Check if all Action Items for this Category are complete
-                const [{ count: incompleteActionItemsCount }] = await tx
-                    .select({ count: count() })
-                    .from(actionItemsTable)
-                    .where(and(
-                        eq(actionItemsTable.categoryId, categoryId),
-                        eq(actionItemsTable.userId, userId),
-                        not(eq(actionItemsTable.status, 'completed')) // Check for non-completed items
-                    ));
-                
-                console.log(`Incomplete action items count for category ${categoryId}: ${incompleteActionItemsCount}`);
+        // 5. Check if all Action Items for this Category are complete
+        const [{ count: incompleteActionItemsCount }] = await tx
+            .select({ count: count() })
+            .from(actionItemsTable)
+            .where(and(
+                eq(actionItemsTable.categoryId, categoryId),
+                eq(actionItemsTable.userId, userId),
+                not(eq(actionItemsTable.status, 'completed'))
+            ));
+        
+        console.log(`Incomplete action items count for category ${categoryId}: ${incompleteActionItemsCount}`);
 
-                const isCategoryComplete = incompleteActionItemsCount === 0;
-                const newCategoryStatus = isCategoryComplete ? 'completed' : 'active'; // Use 'active' to match schema default
+        const isCategoryComplete = incompleteActionItemsCount === 0;
+        const newCategoryStatus = isCategoryComplete ? 'completed' : 'active';
 
-                // 6. Update Category status if changed
-                if (newCategoryStatus !== parentCategory.currentStatus) {
-                    console.log(`Updating category ${categoryId} status from ${parentCategory.currentStatus} to ${newCategoryStatus}`);
-                    await tx
-                        .update(categoriesTable)
-                        .set({ status: newCategoryStatus, updatedAt: new Date() })
-                        .where(and(eq(categoriesTable.id, categoryId), eq(categoriesTable.userId, userId)));
-                }
-            }
-        } // End Action Item status update block
+        // 6. Update Category status if changed
+        if (newCategoryStatus !== parentCategory.currentStatus) {
+            console.log(`Updating category ${categoryId} status from ${parentCategory.currentStatus} to ${newCategoryStatus}`);
+            await tx
+                .update(categoriesTable)
+                .set({ status: newCategoryStatus, updatedAt: new Date() })
+                .where(and(eq(categoriesTable.id, categoryId), eq(categoriesTable.userId, userId)));
+        }
     }); // End transaction
 }
 

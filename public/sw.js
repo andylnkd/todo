@@ -1,4 +1,4 @@
-const CACHE_NAME = 'innatus-shell-v1';
+const CACHE_NAME = 'innatus-shell-v2';
 const OFFLINE_URL = '/offline';
 const PRECACHE_URLS = [
   '/',
@@ -8,6 +8,45 @@ const PRECACHE_URLS = [
   '/pwa-icon-512.svg',
   '/pwa-icon-maskable.svg',
 ];
+
+function isSuccessfulCacheableResponse(response) {
+  return response && response.ok && response.type !== 'error';
+}
+
+async function networkFirst(request, fallbackUrl) {
+  try {
+    const response = await fetch(request);
+    if (isSuccessfulCacheableResponse(response)) {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    if (fallbackUrl) {
+      return caches.match(fallbackUrl);
+    }
+    throw new Error('Network unavailable and no cached response found.');
+  }
+}
+
+async function staleWhileRevalidate(request) {
+  const cachedResponse = await caches.match(request);
+  const networkFetch = fetch(request)
+    .then(async (response) => {
+      if (isSuccessfulCacheableResponse(response)) {
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => cachedResponse);
+
+  return cachedResponse || networkFetch;
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -33,36 +72,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return response;
-        })
-        .catch(async () => {
-          const cachedResponse = await caches.match(event.request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          return caches.match(OFFLINE_URL);
-        })
-    );
+  if (requestUrl.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const networkFetch = fetch(event.request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return response;
-        })
-        .catch(() => cachedResponse);
+  if (event.request.mode === 'navigate') {
+    event.respondWith(networkFirst(event.request, OFFLINE_URL));
+    return;
+  }
 
-      return cachedResponse || networkFetch;
-    })
-  );
+  const acceptHeader = event.request.headers.get('accept') || '';
+  const isAppDataRequest =
+    requestUrl.pathname.startsWith('/_next/data/') ||
+    acceptHeader.includes('text/x-component') ||
+    acceptHeader.includes('application/json');
+
+  if (isAppDataRequest) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  event.respondWith(staleWhileRevalidate(event.request));
 });

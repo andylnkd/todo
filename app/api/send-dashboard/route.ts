@@ -25,6 +25,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    let additionalEmails: string[] = [];
+    let selectedItems: string[] = [];
+
+    try {
+      const body: { emails?: string[]; selectedItems?: string[] } = await request.json();
+      if (body.emails && Array.isArray(body.emails)) {
+        additionalEmails = body.emails.filter((email: string) => typeof email === 'string' && isValidEmail(email));
+      }
+      if (body.selectedItems && Array.isArray(body.selectedItems)) {
+        selectedItems = body.selectedItems.filter((id: string) => typeof id === 'string' && id.length > 0);
+      }
+    } catch {
+      console.log("No valid request body provided or invalid JSON.");
+    }
+
     // Get user details from Clerk 
     // Await the clerkClient() promise first, then access users
     const client = await clerkClient(); 
@@ -36,24 +51,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Primary email address not found for user.' }, { status: 400 });
     }
 
-    // Get additional emails from request body (optional)
-    let additionalEmails: string[] = [];
-    try {
-      const body: { emails?: string[] } = await request.json();
-      if (body.emails && Array.isArray(body.emails)) {
-        additionalEmails = body.emails.filter((email: string) => typeof email === 'string' && isValidEmail(email));
-      }
-    } catch {
-       // Ignore if request body is empty or not valid JSON
-       console.log("No valid additional emails in request body or invalid format.");
-    }
-
     const allRecipients = [userEmail, ...additionalEmails];
     // Remove duplicates just in case
     const uniqueRecipients = [...new Set(allRecipients)];
 
     // Fetch the action items data
-    const actionItemsData = await getFormattedActionItems(userId);
+    const actionItemsData = await getFormattedActionItems(userId, selectedItems);
 
     // Send email using Resend
     const { data, error } = await resend.emails.send({

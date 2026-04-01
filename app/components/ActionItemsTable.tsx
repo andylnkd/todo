@@ -130,7 +130,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
   // Function to handle saving action item edits
   const handleSaveActionItem = async (id: string, newText: string, newDueDate?: Date | null, priority?: 'high' | 'normal' | 'low') => {
     try {
-      await saveActionItemText(id, newText, newDueDate || null, priority);
+      await saveActionItemText(id, newText, newDueDate, priority);
       router.refresh(); // Refresh to show changes
     } catch (error) {
       console.error('Failed to update action item:', error);
