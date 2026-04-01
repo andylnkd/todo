@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from '../../drizzle/db'; 
 import * as schema from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { TASK_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
+import { MULTIMODAL_TASK_EXTRACTION_PROMPT, TASK_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
 
 function getGenAI(): GoogleGenerativeAI {
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -38,6 +38,80 @@ interface ProcessTranscriptParams {
   itemType?: string; // 'daily' or 'regular' (defaults to regular in DB schema)
 }
 
+function parseTaskExtractionResponse(aiResponseText: string): ParsedTranscriptResponse {
+  let normalized = aiResponseText.replace(/```json\n?|\n?```/g, '').trim();
+  const jsonMatch = normalized.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    normalized = jsonMatch[0];
+  }
+
+  const parsedData = JSON.parse(normalized) as ParsedTranscriptResponse;
+  if (!parsedData.categories || !Array.isArray(parsedData.categories)) {
+    throw new Error('Invalid response from AI: missing or invalid categories array');
+  }
+
+  return parsedData;
+}
+
+async function saveParsedCategories({
+  parsedData,
+  userId,
+  transcriptionId,
+  itemType,
+}: {
+  parsedData: ParsedTranscriptResponse;
+  userId: string;
+  transcriptionId: string;
+  itemType?: string;
+}) {
+  await db.transaction(async (tx) => {
+    for (const category of parsedData.categories) {
+      const insertedCategory = await tx
+        .insert(schema.categories)
+        .values({ name: category.name, userId })
+        .returning({ id: schema.categories.id });
+      const categoryId = insertedCategory[0]?.id;
+      if (!categoryId) throw new Error(`Failed to insert category: ${category.name}`);
+
+      for (const item of category.items) {
+        const valuesToInsert: {
+          categoryId: string;
+          actionItem: string;
+          userId: string;
+          transcriptionId: string;
+          status: 'pending' | 'completed';
+          type?: string;
+        } = {
+          categoryId,
+          actionItem: item.actionItem,
+          userId,
+          transcriptionId,
+          status: 'pending',
+        };
+        if (itemType) {
+          valuesToInsert.type = itemType;
+        }
+        const insertedActionItem = await tx
+          .insert(schema.actionItems)
+          .values(valuesToInsert)
+          .returning({ id: schema.actionItems.id });
+        const actionItemId = insertedActionItem[0]?.id;
+        if (!actionItemId) throw new Error(`Failed to insert action item: ${item.actionItem}`);
+
+        if (item.nextSteps && item.nextSteps.length > 0) {
+          const nextStepsValues = item.nextSteps.map(step => ({
+            actionItemId,
+            step,
+            userId,
+            completed: false,
+          }));
+          await tx.insert(schema.nextSteps).values(nextStepsValues);
+        }
+      }
+    }
+  });
+}
+
 export async function processTranscriptAndSave({
   transcript,
   userId,
@@ -62,67 +136,63 @@ export async function processTranscriptAndSave({
   const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
   const result = await model.generateContent([TASK_EXTRACTION_PROMPT, transcript]);
   const response = await result.response;
-  let aiResponseText = response.text();
+  const aiResponseText = response.text();
 
   // 3. Parse and Validate AI Response
-  const parsedData: ParsedTranscriptResponse = (() => {
-    aiResponseText = aiResponseText.replace(/```json\n?|\n?```/g, '').trim();
-    const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      aiResponseText = jsonMatch[0];
-    }
-    return JSON.parse(aiResponseText);
-  })();
-  if (!parsedData.categories || !Array.isArray(parsedData.categories)) {
-    throw new Error('Invalid response from AI: missing or invalid categories array');
-  }
+  const parsedData = parseTaskExtractionResponse(aiResponseText);
 
   // 4. Save Action Items to Database using a Transaction
-  await db.transaction(async (tx) => {
-    for (const category of parsedData.categories) {
-      const insertedCategory = await tx
-        .insert(schema.categories)
-        .values({ name: category.name, userId: userId })
-        .returning({ id: schema.categories.id });
-      const categoryId = insertedCategory[0]?.id;
-      if (!categoryId) throw new Error(`Failed to insert category: ${category.name}`);
+  await saveParsedCategories({
+    parsedData,
+    userId,
+    transcriptionId,
+    itemType,
+  });
 
-      for (const item of category.items) {
-        const valuesToInsert: {
-          categoryId: string;
-          actionItem: string;
-          userId: string;
-          transcriptionId: string;
-          status: 'pending' | 'completed';
-          type?: string;
-        } = {
-          categoryId: categoryId,
-          actionItem: item.actionItem,
-          userId: userId,
-          transcriptionId: transcriptionId!,
-          status: 'pending',
-        };
-        if (itemType) {
-          valuesToInsert.type = itemType;
-        }
-        const insertedActionItem = await tx
-          .insert(schema.actionItems)
-          .values(valuesToInsert)
-          .returning({ id: schema.actionItems.id });
-        const actionItemId = insertedActionItem[0]?.id;
-        if (!actionItemId) throw new Error(`Failed to insert action item: ${item.actionItem}`);
+  return parsedData;
+}
 
-        if (item.nextSteps && item.nextSteps.length > 0) {
-          const nextStepsValues = item.nextSteps.map(step => ({
-            actionItemId: actionItemId,
-            step: step,
-            userId: userId,
-            completed: false,
-          }));
-          await tx.insert(schema.nextSteps).values(nextStepsValues);
-        }
-      }
-    }
+export async function processLiveCaptureAndSave({
+  transcript,
+  frames,
+  userId,
+  itemType,
+}: {
+  transcript: string;
+  frames: { data: string; mimeType: string }[];
+  userId: string;
+  itemType?: string;
+}): Promise<ParsedTranscriptResponse> {
+  const newTranscription = await db
+    .insert(schema.transcriptions)
+    .values({
+      text: transcript,
+      userId,
+    })
+    .returning({ id: schema.transcriptions.id });
+  const transcriptionId = newTranscription[0]?.id;
+  if (!transcriptionId) {
+    throw new Error('Failed to save live capture record.');
+  }
+
+  const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
+  const prompt = `${MULTIMODAL_TASK_EXTRACTION_PROMPT}\n\nTranscript:\n${transcript || '[No transcript provided]'}`;
+  const imageParts = frames.map((frame) => ({
+    inlineData: {
+      data: frame.data,
+      mimeType: frame.mimeType,
+    },
+  }));
+
+  const result = await model.generateContent([prompt, ...imageParts]);
+  const response = await result.response;
+  const parsedData = parseTaskExtractionResponse(response.text());
+
+  await saveParsedCategories({
+    parsedData,
+    userId,
+    transcriptionId,
+    itemType,
   });
 
   return parsedData;

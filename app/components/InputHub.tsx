@@ -4,11 +4,12 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { MoreHorizontal, Keyboard, Camera, X, Loader2, Check } from 'lucide-react';
+import { MoreHorizontal, Keyboard, Camera, X, Loader2, Check, Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AudioRecorderWrapper from './AudioRecorderWrapper';
 import QuickAddForm from './QuickAddForm';
 import ImageUploadForm from './ImageUploadForm';
+import ExperimentalLiveCapture from './ExperimentalLiveCapture';
 
 // Define the shape of a category for the props
 interface Category {
@@ -28,7 +29,7 @@ export default function InputHub({
 }: InputHubProps) {
   const isDaily = variant === 'daily';
 
-  const [view, setView] = useState<'main' | 'type' | 'image'>('main');
+  const [view, setView] = useState<'main' | 'type' | 'image' | 'live'>('main');
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedItems, setExtractedItems] = useState<string[]>([]);
   const [selectedItems, setSelectedItems] = useState<Record<number, boolean>>({});
@@ -151,6 +152,21 @@ export default function InputHub({
             </Button>
           </>
         );
+      case 'live':
+        return (
+          <>
+            <ExperimentalLiveCapture
+              itemType={isDaily ? 'daily' : 'regular'}
+              onComplete={() => {
+                setView('main');
+                router.refresh();
+              }}
+            />
+            <Button variant="ghost" onClick={() => setView('main')} className="w-full">
+              <X className="h-4 w-4 mr-2" /> Cancel
+            </Button>
+          </>
+        );
       default:
         return null;
     }
@@ -180,6 +196,10 @@ export default function InputHub({
                   <Button variant="ghost" onClick={() => setView('image')} className="w-full justify-start">
                     <Camera className="mr-2 h-4 w-4" />
                     Image
+                  </Button>
+                  <Button variant="ghost" onClick={() => setView('live')} className="w-full justify-start">
+                    <Video className="mr-2 h-4 w-4" />
+                    Live Camera
                   </Button>
                 </div>
               </PopoverContent>
