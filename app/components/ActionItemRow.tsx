@@ -1,9 +1,8 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Mic, Trash2, ArrowRight, CalendarIcon, Timer } from 'lucide-react';
+import { Mic, Trash2, ArrowRight, CalendarIcon, Timer, Share2 } from 'lucide-react';
 import EditableTextItem from './EditableTextItem';
 import EditableNextStep from './EditableNextStep';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -109,17 +108,30 @@ export function ActionItemRow({ item, isSelected, onSaveActionItem, toggleItem, 
       <div className="flex flex-wrap items-center gap-2">
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex items-center">
-              <Checkbox
-                id={`select-${item.actionItemId}`}
-                checked={isSelected}
-                onCheckedChange={() => toggleItem(item.actionItemId)}
-                className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-              />
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 gap-2 border-dashed",
+                isSelected && "border-primary bg-primary/10 text-primary"
+              )}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleItem(item.actionItemId);
+              }}
+              aria-pressed={isSelected}
+              aria-label={isSelected ? 'Remove from sharing selection' : 'Select for sharing'}
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">
+                {isSelected ? 'Selected' : 'Share'}
+              </span>
+            </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Select for sharing</p>
+            <p>{isSelected ? 'Remove from sharing selection' : 'Select for sharing'}</p>
           </TooltipContent>
         </Tooltip>
         <Tooltip>

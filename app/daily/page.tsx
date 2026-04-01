@@ -14,12 +14,9 @@ import ShareToTelegramButton from '../components/ShareToTelegramButton';
 import NativeShareButton from '../components/NativeShareButton';
 import CopySelectedItemsButton from '../components/CopySelectedItemsButton';
 
-// Helper to get start and end of today
-function getTodayTimestamps() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+function getDailyWindow(hours = 48) {
   const end = new Date();
-  end.setHours(23, 59, 59, 999);
+  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
   return { start, end };
 }
 
@@ -29,7 +26,7 @@ export default async function DailyPage() {
     return <p className="p-4 text-center text-red-500">Please sign in to view this page.</p>;
   }
 
-  const { start, end } = getTodayTimestamps();
+  const { start, end } = getDailyWindow(48);
 
   // Fetch all categories for the InputHub dropdown
   const allCategoriesForUser = await db.query.categories.findMany({
@@ -58,7 +55,7 @@ export default async function DailyPage() {
   // Process the rows into a nested structure suitable for ActionItemsTable
   const categoriesMap = new Map();
   dailyItemsRaw.forEach((row) => {
-    // Only process rows that have an action item for today
+    // Only process rows that have an action item in the active Daily Dump window.
     if (!row.categories || !row.action_items) return;
 
     const categoryId = row.categories.id;
@@ -135,7 +132,10 @@ export default async function DailyPage() {
             
             <Card>
               <CardHeader>
-                <CardTitle>Today&apos;s Entries</CardTitle>
+                <CardTitle>Last 48 Hours</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Daily items stay visible here for 48 hours before expiring.
+                </p>
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <SendWhatsAppButton categories={categories} title="Daily Dump" />
                   <ShareToTelegramButton categories={categories} title="Daily Dump" />
