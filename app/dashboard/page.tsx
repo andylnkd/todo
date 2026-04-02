@@ -66,6 +66,8 @@ export default async function Dashboard() {
           categoriesMap.set(categoryId, {
             id: categoryId,
             name: row.categories.name,
+            status: row.categories.status,
+            createdAt: row.categories.createdAt,
             items: new Map()
           });
         }

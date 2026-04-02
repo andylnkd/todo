@@ -62,6 +62,7 @@ interface Category {
   id: string;
   name: string;
   status: string;  // Add status field
+  createdAt?: Date | string | null;
   items: ActionItemWithNextSteps[];
 }
 
@@ -92,7 +93,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Category[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('dueDate');
-  const { toggleItem, isSelected } = useSelectedItems();
+  const { toggleItem, isSelected, setItemsSelected } = useSelectedItems();
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [isMerging, setIsMerging] = useState(false);
   const [mergeMode, setMergeMode] = useState<'smart' | 'simple' | 'custom'>('simple');
@@ -854,6 +855,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
                 category={category}
                 emoji={emoji}
                 isSelected={isSelected}
+                setItemsSelected={setItemsSelected}
                 toggleItem={toggleItem}
                 handleSaveCategory={handleSaveCategory}
                 handleSaveActionItem={handleSaveActionItem}
@@ -887,6 +889,7 @@ const ActionItemsTable: React.FC<ActionItemsTableProps> = ({ categories, variant
                 category={category}
                 emoji={emoji}
                 isSelected={isSelected}
+                setItemsSelected={setItemsSelected}
                 toggleItem={toggleItem}
                 handleSaveCategory={handleSaveCategory}
                 handleSaveActionItem={handleSaveActionItem}

@@ -63,8 +63,8 @@ export default async function DailyPage() {
       categoriesMap.set(categoryId, {
         id: categoryId,
         name: row.categories.name,
-        // The status can be derived or added to the schema if needed
-        status: 'pending', 
+        status: row.categories.status,
+        createdAt: row.categories.createdAt,
         items: new Map()
       });
     }

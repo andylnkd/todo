@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 interface SelectedItemsContextType {
   selectedItems: Set<string>;
   toggleItem: (actionItemId: string) => void;
+  setItemsSelected: (actionItemIds: string[], selected: boolean) => void;
   clearSelection: () => void;
   isSelected: (actionItemId: string) => boolean;
 }
@@ -26,6 +27,20 @@ export function SelectedItemsProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const setItemsSelected = (actionItemIds: string[], selected: boolean) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      actionItemIds.forEach((actionItemId) => {
+        if (selected) {
+          newSet.add(actionItemId);
+        } else {
+          newSet.delete(actionItemId);
+        }
+      });
+      return newSet;
+    });
+  };
+
   const clearSelection = () => {
     setSelectedItems(new Set());
   };
@@ -35,7 +50,7 @@ export function SelectedItemsProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SelectedItemsContext.Provider value={{ selectedItems, toggleItem, clearSelection, isSelected }}>
+    <SelectedItemsContext.Provider value={{ selectedItems, toggleItem, setItemsSelected, clearSelection, isSelected }}>
       {children}
     </SelectedItemsContext.Provider>
   );

@@ -3,9 +3,10 @@ import { AccordionItem, AccordionTrigger, AccordionContent } from '@/components/
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Mic, Trash2, ArrowRight } from 'lucide-react';
+import { Mic, Trash2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import EditableTextItem from './EditableTextItem';
 import { ActionItemRow } from './ActionItemRow';
+import { format } from 'date-fns';
 
 interface NextStepDetail {
   id: string;
@@ -26,6 +27,7 @@ interface Category {
   id: string;
   name: string;
   status: string;
+  createdAt?: Date | string | null;
   items: ActionItemWithNextSteps[];
 }
 
@@ -33,6 +35,7 @@ interface CategoryAccordionItemProps {
   category: Category;
   emoji: string;
   isSelected: (id: string) => boolean;
+  setItemsSelected: (actionItemIds: string[], selected: boolean) => void;
   toggleItem: (id: string) => void;
   handleSaveCategory: (id: string, newName: string) => Promise<void>;
   handleSaveActionItem: (id: string, newText: string, newDueDate?: Date | null, priority?: 'high' | 'normal' | 'low') => Promise<void>;
@@ -52,6 +55,7 @@ export function CategoryAccordionItem({
   category, 
   emoji, 
   isSelected, 
+  setItemsSelected,
   toggleItem, 
   handleSaveCategory, 
   handleSaveActionItem, 
@@ -66,19 +70,58 @@ export function CategoryAccordionItem({
   handleDeleteCategory,
   handleCategoryComplete
 }: CategoryAccordionItemProps) {
+  const createdLabel = category.createdAt
+    ? format(new Date(category.createdAt), 'MMM d h:mma').toUpperCase()
+    : null;
+  const itemIds = category.items.map((item) => item.actionItemId);
+  const selectedCount = itemIds.filter((itemId) => isSelected(itemId)).length;
+  const shareState = selectedCount === 0 ? false : selectedCount === itemIds.length ? true : 'indeterminate';
+
   return (
     <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
       <div className="flex items-center px-4 py-2">
-        <Checkbox
-          checked={category.status === 'completed'}
-          onCheckedChange={(checked) => handleCategoryComplete(category.id, !!checked)}
-          className="mr-2"
-        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>
+              <Checkbox
+                checked={shareState}
+                onCheckedChange={(checked) => setItemsSelected(itemIds, !!checked)}
+                className="mr-2"
+                aria-label={`Select all items in ${category.name} for sharing`}
+              />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Select all items in this category for sharing</p>
+          </TooltipContent>
+        </Tooltip>
         <AccordionTrigger className="flex-1 flex items-center text-left">
           <span>{emoji}</span>
-          <span className="font-medium ml-2">{category.name}</span>
+          <span className="ml-2 flex min-w-0 items-center gap-2">
+            <span className="font-medium truncate">{category.name}</span>
+            {createdLabel && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-600">
+                {createdLabel}
+              </span>
+            )}
+          </span>
         </AccordionTrigger>
         <div className="flex items-center gap-2 ml-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={category.status === 'completed' ? 'h-8 w-8 text-green-600 hover:text-green-700' : 'h-8 w-8 text-slate-500 hover:text-slate-700'}
+                onClick={() => handleCategoryComplete(category.id, category.status !== 'completed')}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{category.status === 'completed' ? 'Mark category active' : 'Mark category complete'}</p>
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
