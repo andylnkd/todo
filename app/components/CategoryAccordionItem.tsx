@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Mic, Trash2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import EditableTextItem from './EditableTextItem';
 import { ActionItemRow } from './ActionItemRow';
-import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface NextStepDetail {
   id: string;
@@ -70,15 +70,23 @@ export function CategoryAccordionItem({
   handleDeleteCategory,
   handleCategoryComplete
 }: CategoryAccordionItemProps) {
-  const createdLabel = category.createdAt
-    ? format(new Date(category.createdAt), 'MMM d h:mma').toUpperCase()
-    : null;
   const itemIds = category.items.map((item) => item.actionItemId);
   const selectedCount = itemIds.filter((itemId) => isSelected(itemId)).length;
   const shareState = selectedCount === 0 ? false : selectedCount === itemIds.length ? true : 'indeterminate';
+  const createdAt = category.createdAt ? new Date(category.createdAt) : null;
+  const ageMs = createdAt ? Date.now() - createdAt.getTime() : Number.POSITIVE_INFINITY;
+  const freshnessClass = ageMs <= 24 * 60 * 60 * 1000
+    ? 'bg-green-500'
+    : ageMs <= 72 * 60 * 60 * 1000
+      ? 'bg-amber-400'
+      : 'bg-slate-200';
 
   return (
-    <AccordionItem key={category.id} value={category.id} className="border rounded-lg">
+    <AccordionItem key={category.id} value={category.id} className="relative overflow-hidden rounded-lg border">
+      <div
+        aria-hidden="true"
+        className={cn('absolute inset-y-0 left-0 w-1.5', freshnessClass)}
+      />
       <div className="flex items-center px-4 py-2">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -97,14 +105,7 @@ export function CategoryAccordionItem({
         </Tooltip>
         <AccordionTrigger className="flex-1 flex items-center text-left">
           <span>{emoji}</span>
-          <span className="ml-2 flex min-w-0 items-center gap-2">
-            <span className="font-medium truncate">{category.name}</span>
-            {createdLabel && (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-slate-600">
-                {createdLabel}
-              </span>
-            )}
-          </span>
+          <span className="ml-2 min-w-0 font-medium truncate">{category.name}</span>
         </AccordionTrigger>
         <div className="flex items-center gap-2 ml-2">
           <Tooltip>
