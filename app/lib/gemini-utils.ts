@@ -1,6 +1,6 @@
 import { jsonrepair } from 'jsonrepair';
 
-export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+export const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
 
 export function extractJsonPayload(text: string): string {
   const cleaned = text.replace(/```json\s*|```\s*/gi, '').trim();
