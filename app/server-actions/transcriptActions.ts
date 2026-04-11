@@ -5,6 +5,7 @@ import { db } from '../../drizzle/db';
 import * as schema from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { MULTIMODAL_TASK_EXTRACTION_PROMPT, TASK_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
+import { DEFAULT_GEMINI_MODEL, parseGeminiJson } from '@/app/lib/gemini-utils';
 
 function getGenAI(): GoogleGenerativeAI {
   const geminiKey = process.env.GEMINI_API_KEY;
@@ -15,7 +16,7 @@ function getGenAI(): GoogleGenerativeAI {
 }
 
 function getGeminiModel(): string {
-  return process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+  return DEFAULT_GEMINI_MODEL;
 }
 
 interface ActionItemForDB { 
@@ -39,13 +40,7 @@ interface ProcessTranscriptParams {
 }
 
 function parseTaskExtractionResponse(aiResponseText: string): ParsedTranscriptResponse {
-  let normalized = aiResponseText.replace(/```json\n?|\n?```/g, '').trim();
-  const jsonMatch = normalized.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    normalized = jsonMatch[0];
-  }
-
-  const parsedData = JSON.parse(normalized) as ParsedTranscriptResponse;
+  const parsedData = parseGeminiJson<ParsedTranscriptResponse>(aiResponseText);
   if (!parsedData.categories || !Array.isArray(parsedData.categories)) {
     throw new Error('Invalid response from AI: missing or invalid categories array');
   }
@@ -288,14 +283,9 @@ export async function enhanceActionItem({
   const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
   const result = await model.generateContent([prompt]);
   const response = await result.response;
-  let aiResponseText = response.text();
-  aiResponseText = aiResponseText.replace(/```json\n?|\n?```/g, '').trim();
-  const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    aiResponseText = jsonMatch[0];
-  }
+  const aiResponseText = response.text();
   console.log('[enhanceActionItem] LLM raw response:', aiResponseText);
-  const parsed = JSON.parse(aiResponseText);
+  const parsed = parseGeminiJson<{ description: string; nextSteps: string[] }>(aiResponseText);
   console.log('[enhanceActionItem] LLM parsed response:', parsed);
 
   // 4. Append new next steps (do not delete existing)
@@ -357,14 +347,9 @@ export async function enhanceCategory({
   const model = getGenAI().getGenerativeModel({ model: getGeminiModel() });
   const result = await model.generateContent([prompt]);
   const response = await result.response;
-  let aiResponseText = response.text();
-  aiResponseText = aiResponseText.replace(/```json\n?|\n?```/g, '').trim();
-  const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    aiResponseText = jsonMatch[0];
-  }
+  const aiResponseText = response.text();
   console.log('[enhanceCategory] LLM raw response:', aiResponseText);
-  const parsed = JSON.parse(aiResponseText);
+  const parsed = parseGeminiJson<{ categoryName: string; items: string[] }>(aiResponseText);
   console.log('[enhanceCategory] LLM parsed response:', parsed);
 
   // 4. Append new action items (do not delete existing)

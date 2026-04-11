@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { auth } from '@clerk/nextjs/server';
 import { db } from '../../drizzle/db';
 import * as schema from '../../drizzle/schema';
-import { eq, and, gte, lte } from 'drizzle-orm';
+import { eq, and, gte, sql } from 'drizzle-orm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import InputHub from '../components/InputHub';
 import ActionItemsTable from '../components/ActionItemsTable';
@@ -13,20 +13,13 @@ import SendWhatsAppButton from '../components/SendWhatsAppButton';
 import ShareToTelegramButton from '../components/ShareToTelegramButton';
 import NativeShareButton from '../components/NativeShareButton';
 import CopySelectedItemsButton from '../components/CopySelectedItemsButton';
-
-function getDailyWindow(hours = 48) {
-  const end = new Date();
-  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
-  return { start, end };
-}
+import SelectAllShareButton from '../components/SelectAllShareButton';
 
 export default async function DailyPage() {
   const { userId } = await auth();
   if (!userId) {
     return <p className="p-4 text-center text-red-500">Please sign in to view this page.</p>;
   }
-
-  const { start, end } = getDailyWindow(48);
 
   // Fetch all categories for the InputHub dropdown
   const allCategoriesForUser = await db.query.categories.findMany({
@@ -43,8 +36,7 @@ export default async function DailyPage() {
       and(
         eq(schema.categories.id, schema.actionItems.categoryId),
         eq(schema.actionItems.type, 'daily'),
-        gte(schema.actionItems.createdAt, start),
-        lte(schema.actionItems.createdAt, end)
+        gte(schema.actionItems.createdAt, sql`CURRENT_TIMESTAMP - INTERVAL '48 hours'`)
       )
     )
     .leftJoin(
@@ -137,6 +129,7 @@ export default async function DailyPage() {
                   Daily items stay visible here for 48 hours before expiring.
                 </p>
                 <div className="flex flex-wrap items-center gap-2 pt-2">
+                  <SelectAllShareButton categories={categories} />
                   <SendWhatsAppButton categories={categories} title="Daily Dump" />
                   <ShareToTelegramButton categories={categories} title="Daily Dump" />
                   <NativeShareButton categories={categories} title="Daily Dump" />

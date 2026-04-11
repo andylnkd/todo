@@ -5,6 +5,7 @@ import { auth } from '@clerk/nextjs/server';
 import { db } from '../../../../drizzle/db';
 import * as schema from '../../../../drizzle/schema';
 import { TASK_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
+import { DEFAULT_GEMINI_MODEL, parseGeminiJson } from '@/app/lib/gemini-utils';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -109,22 +110,17 @@ export async function POST(request: NextRequest) {
 
       // Process transcript with Gemini
       log('🤖 Processing transcript with Gemini AI');
-      const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
+      const model = genAI.getGenerativeModel({ model: DEFAULT_GEMINI_MODEL });
       const result = await model.generateContent([TASK_EXTRACTION_PROMPT, transcript]);
       const response = await result.response;
-      let text = response.text();
+      const text = response.text();
       log('🎯 Received AI response', { responseLength: text.length });
 
       // Parse and validate AI response
       log('🔍 Parsing AI response');
       let parsedData;
       try {
-        text = text.replace(/```json\n?|\n?```/g, '').trim();
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          text = jsonMatch[0];
-        }
-        parsedData = JSON.parse(text);
+        parsedData = parseGeminiJson<{ categories: { name: string; items: { actionItem: string; nextSteps: string[] }[] }[] }>(text);
         log('✅ Successfully parsed AI response', { 
           categoriesCount: parsedData.categories?.length 
         });

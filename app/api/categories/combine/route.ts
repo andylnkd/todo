@@ -5,6 +5,7 @@ import { categories, actionItems, nextSteps } from '@/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { CATEGORY_MERGE_PROMPT } from '@/app/lib/ai-prompts';
+import { DEFAULT_GEMINI_MODEL } from '@/app/lib/gemini-utils';
 
 // Define merge modes
 type MergeMode = 'smart' | 'simple' | 'custom';
@@ -72,7 +73,7 @@ export async function POST(req: Request) {
           if (!geminiKey) {
             throw new Error('GEMINI_API_KEY not configured');
           }
-          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
+          const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: DEFAULT_GEMINI_MODEL });
           const prompt = CATEGORY_MERGE_PROMPT
             .replace('{numCategories}', categoriesToMerge.length.toString())
             .replace('{categoriesList}', categoriesToMerge.map(cat => `- ${cat.name}`).join('\n'));

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { auth } from '@clerk/nextjs/server';
 import { FLAT_EXTRACTION_PROMPT } from '@/app/lib/ai-prompts';
+import { DEFAULT_GEMINI_MODEL, parseGeminiJson } from '@/app/lib/gemini-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const imageBlob = file as Blob;
     
-    const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
+    const model = new GoogleGenerativeAI(geminiKey).getGenerativeModel({ model: DEFAULT_GEMINI_MODEL });
     
     const base64Data = Buffer.from(await imageBlob.arrayBuffer()).toString("base64");
 
@@ -36,16 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ items: [] });
     }
 
-    let items: string[] = [];
-    // The response is often wrapped in markdown, so we extract the JSON part.
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      items = JSON.parse(jsonMatch[0]);
-    } else {
-      // Fallback if no array is found in the text
-      console.warn("Could not find a JSON array in the AI response, attempting to parse full text. Raw:", text);
-      items = JSON.parse(text);
-    }
+    const items = parseGeminiJson<string[]>(text);
     
     return NextResponse.json({ items });
 

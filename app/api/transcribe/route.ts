@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { GoogleGenAI } from '@google/genai';
+import { DEFAULT_GEMINI_MODEL } from '@/app/lib/gemini-utils';
 
 // Add CORS headers helper function
 function corsHeaders() {
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     if (!geminiKey) {
         return NextResponse.json({ error: 'Gemini API key not configured.' }, { status: 500, headers: corsHeaders() });
     }
-    const geminiModel = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview';
+    const geminiModel = DEFAULT_GEMINI_MODEL;
 
     try {
         const formData = await req.formData();

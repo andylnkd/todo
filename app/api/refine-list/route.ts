@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { jsonrepair } from 'jsonrepair';
 import { getFormattedActionItems, FormattedCategoryData } from '@/app/lib/data';
+import { DEFAULT_GEMINI_MODEL, parseGeminiJson } from '@/app/lib/gemini-utils';
 
 // Structure Gemini is expected to return (no IDs, simplified next steps)
 interface GeminiActionItem {
@@ -120,7 +120,7 @@ export async function POST() {
      );
 
      // Call Gemini API (first attempt)
-     const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite-preview' });
+     const model = genAI.getGenerativeModel({ model: DEFAULT_GEMINI_MODEL });
      let result, response, text;
      let parsedSuggestions: GeminiSuggestions;
      const step = 'first';
@@ -130,10 +130,7 @@ export async function POST() {
        text = response.text();
 
        try {
-           // Clean up potential markdown wrapping the JSON
-           const cleanedText = text.replace(/^```json\s*|```\s*$/g, '');
-           const repairedJson = jsonrepair(cleanedText);
-           parsedSuggestions = JSON.parse(repairedJson);
+           parsedSuggestions = parseGeminiJson<GeminiSuggestions>(text);
        } catch (e) {
            console.error("Failed to parse JSON from Gemini:", e);
            console.error("Original Gemini response text for debugging:", text);

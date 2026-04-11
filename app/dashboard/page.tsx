@@ -22,6 +22,7 @@ import { SelectedItemsProvider } from '../context/SelectedItemsContext';
 import { CombineCategoriesButton } from '@/app/components/CombineCategoriesButton';
 import InputHub from '../components/InputHub'; // Import the new InputHub
 import InstallAppButton from '../components/InstallAppButton';
+import SelectAllShareButton from '../components/SelectAllShareButton';
 
 // Server actions moved to app/server-actions/dashboardActions.ts
 
@@ -134,6 +135,7 @@ export default async function Dashboard() {
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <CombineCategoriesButton categories={categories} />
                   <RefineListWrapper categories={categories} />
+                  <SelectAllShareButton categories={categories} />
                   <SendWhatsAppButton categories={categories} />
                   <CopyMarkdownButton categories={categories} />
                   <SendDashboardButton />
