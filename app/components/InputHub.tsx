@@ -10,6 +10,7 @@ import AudioRecorderWrapper from './AudioRecorderWrapper';
 import QuickAddForm from './QuickAddForm';
 import ImageUploadForm from './ImageUploadForm';
 import ExperimentalLiveCapture from './ExperimentalLiveCapture';
+import { parseApiError, parseApiResponse } from '@/app/lib/api-client';
 
 // Define the shape of a category for the props
 interface Category {
@@ -47,9 +48,9 @@ export default function InputHub({
     });
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.error || 'Failed to process transcript.');
+      throw await parseApiError(response, 'Failed to process transcript.');
     }
+    await parseApiResponse(response);
 
     router.refresh();
   };
@@ -69,11 +70,10 @@ export default function InputHub({
       });
 
       if (!response.ok) {
-        const errorBody = await response.json();
-        throw new Error(errorBody.error || 'Failed to extract items from image.');
+        throw await parseApiError(response, 'Failed to extract items from image.');
       }
       
-      const result = await response.json();
+      const result = await parseApiResponse<{ items: string[] }>(response);
       const items = result.items;
 
       if (items && items.length > 0) {
@@ -111,9 +111,9 @@ export default function InputHub({
         body: JSON.stringify({ items: itemsToSave, itemType: isDaily ? 'daily' : 'regular' }),
       });
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.error || 'Failed to save extracted items.');
+        throw await parseApiError(response, 'Failed to save extracted items.');
       }
+      await parseApiResponse(response);
       toast({ title: "Items saved successfully!" });
       setExtractedItems([]);
       setSelectedItems({});

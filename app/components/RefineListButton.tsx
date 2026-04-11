@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Sparkles } from "lucide-react";
+import { parseApiError, parseApiResponse } from '@/app/lib/api-client';
 
 interface Category {
   id: string;
@@ -45,11 +46,13 @@ export function RefineListButton({ categories, onApply }: RefineListButtonProps)
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to get refinements");
+        throw await parseApiError(response, "Failed to get refinements");
       }
 
-      const data = await response.json();
+      const data = await parseApiResponse<{
+        proposedStructure: RefinedStructure[];
+        changeSummary?: string;
+      }>(response);
       
       setProposedStructure(data.proposedStructure);
       setSuggestionsText(data.changeSummary || "No specific summary provided, but here is the proposed structure:\n\n" + JSON.stringify(data.proposedStructure, null, 2));

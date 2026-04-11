@@ -4,6 +4,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Camera, Loader2, Square, WandSparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { parseApiError, parseApiResponse } from '@/app/lib/api-client';
 
 interface ExperimentalLiveCaptureProps {
   itemType: 'daily' | 'regular';
@@ -101,11 +102,10 @@ export default function ExperimentalLiveCapture({
       method: 'POST',
       body: formData,
     });
-    const transcribeData = await transcribeResponse.json();
     if (!transcribeResponse.ok) {
-      const details = transcribeData?.details ? ` ${transcribeData.details}` : '';
-      throw new Error((transcribeData?.error || 'Failed to transcribe audio') + details);
+      throw await parseApiError(transcribeResponse, 'Failed to transcribe audio');
     }
+    const transcribeData = await parseApiResponse<{ transcript: string }>(transcribeResponse);
 
     const processResponse = await fetch('/api/process-live-capture', {
       method: 'POST',
@@ -116,11 +116,10 @@ export default function ExperimentalLiveCapture({
         type: itemType,
       }),
     });
-    const processData = await processResponse.json().catch(() => ({}));
     if (!processResponse.ok) {
-      const details = processData?.details ? ` ${processData.details}` : '';
-      throw new Error((processData?.error || 'Failed to process live capture') + details);
+      throw await parseApiError(processResponse, 'Failed to process live capture');
     }
+    await parseApiResponse(processResponse);
   }, [itemType]);
 
   const startRecording = async () => {

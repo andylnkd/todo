@@ -3,6 +3,7 @@
 import { RefineListButton } from "./RefineListButton";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { parseApiError, parseApiResponse } from '@/app/lib/api-client';
 
 interface Category {
   id: string;
@@ -32,8 +33,8 @@ export default function RefineListWrapper({ categories }: RefineListWrapperProps
 
   const handleApplyRefinements = async (refinedStructure: RefinedStructure[]) => {
     try {
-      const response = await fetch('/api/refine-list', {
-        method: 'PUT',
+      const response = await fetch('/api/apply-refinements', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -41,9 +42,9 @@ export default function RefineListWrapper({ categories }: RefineListWrapperProps
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to apply refinements');
+        throw await parseApiError(response, 'Failed to apply refinements');
       }
+      await parseApiResponse(response);
 
       toast({
         title: "Success",

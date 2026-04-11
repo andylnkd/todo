@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AudioRecorder } from './AudioRecorder';
 import { Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast"; // Corrected import path assuming standard shadcn setup
+import { parseApiError, parseApiResponse } from '@/app/lib/api-client';
 
 interface AudioRecorderWrapperProps {
   onTranscriptProcessed: (transcript: string) => Promise<void> | void;
@@ -29,11 +30,10 @@ export default function AudioRecorderWrapper({ onTranscriptProcessed }: AudioRec
         body: formData,
       });
 
-      const transcribeData = await transcribeResponse.json();
       if (!transcribeResponse.ok) {
-        const details = transcribeData?.details ? ` ${transcribeData.details}` : '';
-        throw new Error((transcribeData?.error || 'Failed to transcribe audio') + details);
+        throw await parseApiError(transcribeResponse, 'Failed to transcribe audio');
       }
+      const transcribeData = await parseApiResponse<{ transcript: string }>(transcribeResponse);
       
       const transcriptText = transcribeData.transcript;
       
