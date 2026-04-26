@@ -5,7 +5,21 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
 
-const connectionString = process.env.DATABASE_URL;
+function normalizeDatabaseUrl(rawValue: string | undefined): string | undefined {
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const trimmed = rawValue.trim();
+  const psqlMatch = trimmed.match(/postgres(?:ql)?:\/\/[^\s"]+/i);
+  if (psqlMatch) {
+    return psqlMatch[0];
+  }
+
+  return trimmed.replace(/^['"]|['"]$/g, '');
+}
+
+const connectionString = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 if (!connectionString) {
   throw new Error('DATABASE_URL environment variable is not set!');
